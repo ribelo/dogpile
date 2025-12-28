@@ -1,14 +1,23 @@
 ---
-import Layout from "@/layouts/Layout.astro"
-import Hero from "@/components/Hero.astro"
-import DogGrid from "@/components/DogGrid"
-import Footer from "@/components/Footer.astro"
+import Layout from '../layouts/Layout.astro'
+import DogGrid from '../components/DogGrid'
 ---
 
-<Layout title="The Pile is Waiting">
-  <Hero />
-  <main class="max-w-7xl mx-auto px-4 py-12">
+<Layout title="Dogpile - Znajdź swojego psa">
+  <main class="container mx-auto px-4 py-8">
+    <h1 class="text-4xl font-bold mb-8 text-center">
+      Psy czekające na adopcję
+    </h1>
+    
+    <div class="mb-6 flex gap-4 flex-wrap justify-center">
+      <input 
+        type="text" 
+        placeholder="Szukaj..." 
+        class="px-4 py-2 border rounded-lg w-full max-w-md"
+        id="search-input"
+      />
+    </div>
+
     <DogGrid client:load />
   </main>
-  <Footer />
 </Layout>

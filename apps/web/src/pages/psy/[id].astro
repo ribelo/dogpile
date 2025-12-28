@@ -1,0 +1,70 @@
+---
+import Layout from '../../layouts/Layout.astro'
+
+const { id } = Astro.params
+
+const API_URL = import.meta.env.API_URL || 'http://localhost:8787'
+const response = await fetch(`${API_URL}/dogs/${id}`)
+
+if (!response.ok) {
+  return Astro.redirect('/404')
+}
+
+const dog = await response.json()
+---
+
+<Layout title={`${dog.name} - Dogpile`}>
+  <main class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+      <a href="/" class="text-blue-600 hover:underline mb-4 inline-block">
+        ← Powrót do listy
+      </a>
+      
+      <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+        {dog.photos?.[0] && (
+          <img 
+            src={dog.photos[0]} 
+            alt={dog.name}
+            class="w-full h-96 object-cover"
+          />
+        )}
+        
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h1 class="text-3xl font-bold">{dog.name}</h1>
+            {dog.urgent && (
+              <span class="bg-red-500 text-white px-3 py-1 rounded-full text-sm">
+                Pilne!
+              </span>
+            )}
+          </div>
+          
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {dog.sex && <div><span class="text-gray-500">Płeć:</span> {dog.sex === 'male' ? 'Pies' : 'Suczka'}</div>}
+            {dog.ageEstimate && <div><span class="text-gray-500">Wiek:</span> ~{Math.round(dog.ageEstimate.months / 12)} lat</div>}
+            {dog.sizeEstimate && <div><span class="text-gray-500">Rozmiar:</span> {dog.sizeEstimate.value}</div>}
+            {dog.locationCity && <div><span class="text-gray-500">Miasto:</span> {dog.locationCity}</div>}
+          </div>
+
+          <div class="prose max-w-none">
+            <h2 class="text-xl font-semibold mb-2">O mnie</h2>
+            <p set:html={dog.generatedBio || dog.description || dog.rawDescription} />
+          </div>
+
+          {dog.personalityTags?.length > 0 && (
+            <div class="mt-6">
+              <h3 class="font-semibold mb-2">Cechy charakteru</h3>
+              <div class="flex flex-wrap gap-2">
+                {dog.personalityTags.map((tag: string) => (
+                  <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </main>
+</Layout>
