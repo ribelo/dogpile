@@ -37,6 +37,7 @@ export interface CreateDogInput {
   readonly urgent?: boolean
   readonly fingerprint: string
   readonly rawDescription?: string | null
+  readonly generatedBio?: string | null
 }
 
 export interface DogFilters {

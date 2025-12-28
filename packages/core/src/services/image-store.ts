@@ -1,21 +1,11 @@
-import { Context, Effect, Layer } from "effect"
-import { StorageError } from "../domain/errors.js"
+import { Context, Effect } from "effect"
+import { StorageError, NotFoundError } from "../domain/errors.js"
 
-export interface PhotoStore {
-  readonly uploadOriginal: (dogId: string, index: number, data: Uint8Array, contentType: string) => Effect.Effect<string, StorageError>
-  readonly uploadOriginalFromUrl: (dogId: string, index: number, url: string) => Effect.Effect<string, StorageError>
-  readonly uploadGenerated: (dogId: string, key: string, data: Uint8Array, contentType: string) => Effect.Effect<string, StorageError>
-  readonly deleteOriginal: (key: string) => Effect.Effect<void, StorageError>
-  readonly deleteGenerated: (key: string) => Effect.Effect<void, StorageError>
-  readonly getOriginalUrl: (key: string) => Effect.Effect<string, StorageError>
-  readonly getGeneratedUrl: (key: string) => Effect.Effect<string, StorageError>
-  readonly listOriginal: (dogId: string) => Effect.Effect<readonly string[], StorageError>
-  readonly listGenerated: (dogId: string) => Effect.Effect<readonly string[], StorageError>
+export interface ImageStore {
+  readonly upload: (key: string, data: ArrayBuffer, contentType: string) => Effect.Effect<string, StorageError>
+  readonly download: (key: string) => Effect.Effect<ArrayBuffer, NotFoundError | StorageError>
+  readonly delete: (key: string) => Effect.Effect<void, StorageError>
+  readonly getUrl: (key: string) => Effect.Effect<string, StorageError>
 }
 
-export const PhotoStore = Context.GenericTag<PhotoStore>("@dogpile/PhotoStore")
-
-export const makePhotoStore = (
-  impl: PhotoStore
-): Layer.Layer<PhotoStore> =>
-  Layer.succeed(PhotoStore, impl)
+export const ImageStore = Context.GenericTag<ImageStore>("@dogpile/ImageStore")

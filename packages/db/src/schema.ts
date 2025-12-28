@@ -87,6 +87,7 @@ export const dogs = sqliteTable("dogs", {
   status: text("status", { enum: ["available", "adopted", "reserved", "removed"] }).notNull().default("available"),
   fingerprint: text("fingerprint").notNull().unique(),
   rawDescription: text("raw_description"),
+  generatedBio: text("generated_bio"),
   lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),

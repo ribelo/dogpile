@@ -69,6 +69,7 @@ export const Dog = Schema.Struct({
   // Meta
   fingerprint: Schema.String,
   rawDescription: Schema.NullOr(Schema.String),
+  generatedBio: Schema.NullOr(Schema.String),
   lastSeenAt: Schema.NullOr(Schema.Date),
   sourceUrl: Schema.NullOr(Schema.String),
   urgent: Schema.Boolean,

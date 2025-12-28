@@ -3,6 +3,7 @@ export { DogRepository, makeDogRepository, type CreateDogInput, type DogFilters,
 export * from "./shelter-repository.js"
 export * from "./vector-store.js"
 export * from "./image-store.js"
+export * from "./photo-store.js"
 export * from "./ai-extraction.js"
 export * from "./openrouter/index.js"
 export * from "./text-extractor.js"
