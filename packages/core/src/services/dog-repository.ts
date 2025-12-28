@@ -35,6 +35,8 @@ export interface CreateDogInput {
   readonly photosGenerated?: readonly string[]
   readonly sourceUrl?: string | null
   readonly urgent?: boolean
+  readonly fingerprint: string
+  readonly rawDescription?: string | null
 }
 
 export interface DogFilters {

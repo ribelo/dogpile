@@ -85,7 +85,9 @@ export const dogs = sqliteTable("dogs", {
   sourceUrl: text("source_url"),
   urgent: integer("urgent", { mode: "boolean" }).notNull().default(false),
   status: text("status", { enum: ["available", "adopted", "reserved", "removed"] }).notNull().default("available"),
-  checksum: text("checksum").notNull(),
+  fingerprint: text("fingerprint").notNull().unique(),
+  rawDescription: text("raw_description"),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 }, (table) => [
@@ -94,6 +96,7 @@ export const dogs = sqliteTable("dogs", {
   index("dogs_status_idx").on(table.status),
   index("dogs_urgent_idx").on(table.urgent),
   index("dogs_location_city_idx").on(table.locationCity),
+  index("dogs_fingerprint_idx").on(table.fingerprint),
 ])
 
 export const syncLogs = sqliteTable("sync_logs", {

@@ -40,6 +40,8 @@ export const genericHtmlAdapter = createAdapter({
     Effect.succeed({
       shelterId: config.shelterId,
       externalId: raw.externalId,
+      fingerprint: raw.fingerprint,
+      rawDescription: raw.rawDescription,
       name: raw.name,
       sex: raw.sex ?? "unknown",
       description: raw.description ?? null,

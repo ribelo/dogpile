@@ -67,10 +67,12 @@ export const Dog = Schema.Struct({
   photosGenerated: Schema.Array(Schema.String),
 
   // Meta
+  fingerprint: Schema.String,
+  rawDescription: Schema.NullOr(Schema.String),
+  lastSeenAt: Schema.NullOr(Schema.Date),
   sourceUrl: Schema.NullOr(Schema.String),
   urgent: Schema.Boolean,
   status: DogStatus,
-  checksum: Schema.String,
   createdAt: Schema.Date,
   updatedAt: Schema.Date,
 })

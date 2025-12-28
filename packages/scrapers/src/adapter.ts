@@ -10,6 +10,8 @@ export interface ScraperConfig {
 }
 
 export interface RawDogData {
+  readonly fingerprint: string
+  readonly rawDescription: string
   readonly externalId: string
   readonly name: string
   readonly breed?: string | null

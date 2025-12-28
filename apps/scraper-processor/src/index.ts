@@ -4,7 +4,6 @@ import { drizzle } from "drizzle-orm/d1"
 import { dogs, shelters, syncLogs } from "@dogpile/db"
 import { getAdapter } from "@dogpile/scrapers"
 import { eq } from "drizzle-orm"
-import { createHash } from "./utils/hash.js"
 
 interface Env {
   DB: D1Database
@@ -69,38 +68,41 @@ export default {
         const html = yield* adapter.fetch(config)
         const rawDogs = yield* adapter.parse(html, config)
 
+        // Get existing dogs by fingerprint
         const existingDogs = yield* Effect.tryPromise({
           try: () =>
             db
-              .select({ externalId: dogs.externalId, id: dogs.id, checksum: dogs.checksum })
+              .select({ fingerprint: dogs.fingerprint, id: dogs.id })
               .from(dogs)
               .where(eq(dogs.shelterId, job.shelterId))
               .all(),
           catch: (e) => new Error(`Failed to fetch existing dogs: ${e}`),
         })
 
-        const existingMap = new Map(existingDogs.map((d) => [d.externalId, d]))
-        const scrapedIds = new Set(rawDogs.map((d) => d.externalId))
+        const existingByFingerprint = new Map(existingDogs.map((d) => [d.fingerprint, d]))
+        const scrapedFingerprints = new Set(rawDogs.map((d) => d.fingerprint))
 
         let added = 0
         let updated = 0
         let removed = 0
         const reindexJobs: ReindexJob[] = []
+        const now = new Date()
 
         for (const raw of rawDogs) {
           const dog = yield* adapter.transform(raw, config)
-          const checksum = createHash(dog)
-          const existing = existingMap.get(raw.externalId)
+          const existing = existingByFingerprint.get(raw.fingerprint)
 
           if (!existing) {
+            // New dog
             const id = crypto.randomUUID()
-            const now = new Date()
             yield* Effect.tryPromise({
               try: () =>
                 db.insert(dogs).values({
                   id,
                   shelterId: dog.shelterId,
                   externalId: dog.externalId,
+                  fingerprint: dog.fingerprint,
+                  rawDescription: dog.rawDescription,
                   name: dog.name,
                   sex: dog.sex as "male" | "female" | "unknown" | null | undefined,
                   description: dog.description,
@@ -132,7 +134,7 @@ export default {
                   sourceUrl: dog.sourceUrl,
                   urgent: dog.urgent ?? false,
                   status: "available",
-                  checksum,
+                  lastSeenAt: now,
                   createdAt: now,
                   updatedAt: now,
                 }),
@@ -140,55 +142,22 @@ export default {
             })
             reindexJobs.push({ type: "upsert", dogId: id, description: dog.description ?? undefined })
             added++
-          } else if (existing.checksum !== checksum) {
+          } else {
+            // Existing dog - just update lastSeenAt (fingerprint matched = no changes)
             yield* Effect.tryPromise({
               try: () =>
                 db
                   .update(dogs)
-                  .set({
-                    name: dog.name,
-                    sex: dog.sex as "male" | "female" | "unknown" | null | undefined,
-                    description: dog.description,
-                    locationName: dog.locationName,
-                    locationCity: dog.locationCity,
-                    locationLat: dog.locationLat,
-                    locationLng: dog.locationLng,
-                    isFoster: dog.isFoster,
-                    breedEstimates: dog.breedEstimates ? [...dog.breedEstimates] : [],
-                    sizeEstimate: dog.sizeEstimate,
-                    ageEstimate: dog.ageEstimate,
-                    weightEstimate: dog.weightEstimate,
-                    personalityTags: dog.personalityTags ? [...dog.personalityTags] : [],
-                    vaccinated: dog.vaccinated,
-                    sterilized: dog.sterilized,
-                    chipped: dog.chipped,
-                    goodWithKids: dog.goodWithKids,
-                    goodWithDogs: dog.goodWithDogs,
-                    goodWithCats: dog.goodWithCats,
-                    furLength: dog.furLength as "short" | "medium" | "long" | null | undefined,
-                    furType: dog.furType as "smooth" | "wire" | "curly" | "double" | null | undefined,
-                    colorPrimary: dog.colorPrimary,
-                    colorSecondary: dog.colorSecondary,
-                    colorPattern: dog.colorPattern as "solid" | "spotted" | "brindle" | "merle" | "bicolor" | "tricolor" | "sable" | "tuxedo" | null | undefined,
-                    earType: dog.earType as "floppy" | "erect" | "semi" | null | undefined,
-                    tailType: dog.tailType as "long" | "short" | "docked" | "curled" | null | undefined,
-                    photos: dog.photos ? [...dog.photos] : [],
-                    photosGenerated: dog.photosGenerated ? [...dog.photosGenerated] : [],
-                    sourceUrl: dog.sourceUrl,
-                    urgent: dog.urgent ?? false,
-                    checksum,
-                    updatedAt: new Date(),
-                  })
+                  .set({ lastSeenAt: now })
                   .where(eq(dogs.id, existing.id)),
-              catch: (e) => new Error(`Failed to update dog: ${e}`),
+              catch: (e) => new Error(`Failed to update lastSeenAt: ${e}`),
             })
-            reindexJobs.push({ type: "upsert", dogId: existing.id, description: dog.description ?? undefined })
-            updated++
           }
         }
 
+        // Mark dogs not seen in this scrape as removed
         for (const existing of existingDogs) {
-          if (!scrapedIds.has(existing.externalId)) {
+          if (!scrapedFingerprints.has(existing.fingerprint)) {
             yield* Effect.tryPromise({
               try: () =>
                 db.update(dogs).set({ status: "removed" }).where(eq(dogs.id, existing.id)),
