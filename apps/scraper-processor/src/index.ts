@@ -1,15 +1,25 @@
-import { Effect } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { FetchHttpClient } from "@effect/platform"
 import { drizzle } from "drizzle-orm/d1"
 import { dogs, shelters, syncLogs } from "@dogpile/db"
 import { getAdapter } from "@dogpile/scrapers"
 import { eq } from "drizzle-orm"
+import {
+  TextExtractor,
+  TextExtractorLive,
+  PhotoAnalyzer,
+  PhotoAnalyzerLive,
+  DescriptionGenerator,
+  DescriptionGeneratorLive,
+  OpenRouterClientLive,
+} from "@dogpile/core/services"
 
 interface Env {
   DB: D1Database
   KV: KVNamespace
   PHOTOS_ORIGINAL: R2Bucket
   REINDEX_QUEUE: Queue<ReindexJob>
+  OPENROUTER_API_KEY: string
 }
 
 interface ScrapeJob {
@@ -68,7 +78,6 @@ export default {
         const html = yield* adapter.fetch(config)
         const rawDogs = yield* adapter.parse(html, config)
 
-        // Get existing dogs by fingerprint
         const existingDogs = yield* Effect.tryPromise({
           try: () =>
             db
@@ -83,8 +92,7 @@ export default {
         const scrapedFingerprints = new Set(rawDogs.map((d) => d.fingerprint))
 
         let added = 0
-        let updated = 0
-        let removed = 0
+        const removed = 0
         const reindexJobs: ReindexJob[] = []
         const now = new Date()
 
@@ -93,7 +101,54 @@ export default {
           const existing = existingByFingerprint.get(raw.fingerprint)
 
           if (!existing) {
-            // New dog
+            // New dog - run AI extraction
+            const textExtractor = yield* TextExtractor
+            const photoAnalyzer = yield* PhotoAnalyzer
+            const descGenerator = yield* DescriptionGenerator
+
+            const textResult = yield* textExtractor.extract(raw.rawDescription).pipe(
+              Effect.catchAll((e) =>
+                Effect.logWarning(`Text extraction failed: ${e}`).pipe(
+                  Effect.map(() => null)
+                )
+              )
+            )
+
+            const photoResult = raw.photos && raw.photos.length > 0
+              ? yield* photoAnalyzer.analyzeMultiple(raw.photos).pipe(
+                  Effect.map(Option.some),
+                  Effect.catchAll((e) =>
+                    Effect.logWarning(`Photo analysis failed: ${e}`).pipe(
+                      Effect.map(() => Option.none())
+                    )
+                  )
+                )
+              : Option.none()
+
+            const bioResult = textResult
+              ? yield* descGenerator.generate({
+                  name: raw.name,
+                  sex: textResult.sex,
+                  breedEstimates: [...textResult.breedEstimates],
+                  ageMonths: textResult.ageEstimate?.months ?? null,
+                  size: textResult.sizeEstimate?.value ?? null,
+                  personalityTags: [...textResult.personalityTags],
+                  goodWithKids: textResult.goodWithKids,
+                  goodWithDogs: textResult.goodWithDogs,
+                  goodWithCats: textResult.goodWithCats,
+                  healthInfo: {
+                    vaccinated: textResult.vaccinated,
+                    sterilized: textResult.sterilized,
+                  },
+                }).pipe(
+                  Effect.catchAll((e) =>
+                    Effect.logWarning(`Bio generation failed: ${e}`).pipe(
+                      Effect.map(() => null)
+                    )
+                  )
+                )
+              : null
+
             const id = crypto.randomUUID()
             yield* Effect.tryPromise({
               try: () =>
@@ -104,35 +159,55 @@ export default {
                   fingerprint: dog.fingerprint,
                   rawDescription: dog.rawDescription,
                   name: dog.name,
-                  sex: dog.sex as "male" | "female" | "unknown" | null | undefined,
-                  description: dog.description,
-                  locationName: dog.locationName,
-                  locationCity: dog.locationCity,
+                  sex: (textResult?.sex ?? dog.sex) as "male" | "female" | "unknown" | null | undefined,
+                  description: bioResult?.bio ?? dog.description,
+                  locationName: textResult?.locationHints?.cityMention ?? dog.locationName,
+                  locationCity: textResult?.locationHints?.cityMention ?? dog.locationCity,
                   locationLat: dog.locationLat,
                   locationLng: dog.locationLng,
-                  isFoster: dog.isFoster,
-                  breedEstimates: dog.breedEstimates ? [...dog.breedEstimates] : [],
-                  sizeEstimate: dog.sizeEstimate,
-                  ageEstimate: dog.ageEstimate,
-                  weightEstimate: dog.weightEstimate,
-                  personalityTags: dog.personalityTags ? [...dog.personalityTags] : [],
-                  vaccinated: dog.vaccinated,
-                  sterilized: dog.sterilized,
-                  chipped: dog.chipped,
-                  goodWithKids: dog.goodWithKids,
-                  goodWithDogs: dog.goodWithDogs,
-                  goodWithCats: dog.goodWithCats,
-                  furLength: dog.furLength as "short" | "medium" | "long" | null | undefined,
-                  furType: dog.furType as "smooth" | "wire" | "curly" | "double" | null | undefined,
-                  colorPrimary: dog.colorPrimary,
-                  colorSecondary: dog.colorSecondary,
-                  colorPattern: dog.colorPattern as "solid" | "spotted" | "brindle" | "merle" | "bicolor" | "tricolor" | "sable" | "tuxedo" | null | undefined,
-                  earType: dog.earType as "floppy" | "erect" | "semi" | null | undefined,
-                  tailType: dog.tailType as "long" | "short" | "docked" | "curled" | null | undefined,
+                  isFoster: textResult?.locationHints?.isFoster ?? dog.isFoster,
+                  breedEstimates: Option.isSome(photoResult)
+                    ? [...photoResult.value.breedEstimates]
+                    : textResult?.breedEstimates
+                    ? [...textResult.breedEstimates]
+                    : [],
+                  sizeEstimate: textResult?.sizeEstimate ?? dog.sizeEstimate,
+                  ageEstimate: textResult?.ageEstimate ?? dog.ageEstimate,
+                  weightEstimate: textResult?.weightEstimate ?? dog.weightEstimate,
+                  personalityTags: textResult?.personalityTags
+                    ? [...textResult.personalityTags]
+                    : [],
+                  vaccinated: textResult?.vaccinated ?? dog.vaccinated,
+                  sterilized: textResult?.sterilized ?? dog.sterilized,
+                  chipped: textResult?.chipped ?? dog.chipped,
+                  goodWithKids: textResult?.goodWithKids ?? dog.goodWithKids,
+                  goodWithDogs: textResult?.goodWithDogs ?? dog.goodWithDogs,
+                  goodWithCats: textResult?.goodWithCats ?? dog.goodWithCats,
+                  furLength: (Option.isSome(photoResult)
+                    ? photoResult.value.furLength
+                    : dog.furLength) as "short" | "medium" | "long" | null | undefined,
+                  furType: (Option.isSome(photoResult)
+                    ? photoResult.value.furType
+                    : dog.furType) as "smooth" | "wire" | "curly" | "double" | null | undefined,
+                  colorPrimary: Option.isSome(photoResult)
+                    ? photoResult.value.colorPrimary
+                    : dog.colorPrimary,
+                  colorSecondary: Option.isSome(photoResult)
+                    ? photoResult.value.colorSecondary
+                    : dog.colorSecondary,
+                  colorPattern: (Option.isSome(photoResult)
+                    ? photoResult.value.colorPattern
+                    : dog.colorPattern) as "solid" | "spotted" | "brindle" | "merle" | "bicolor" | "tricolor" | "sable" | "tuxedo" | null | undefined,
+                  earType: (Option.isSome(photoResult)
+                    ? photoResult.value.earType
+                    : dog.earType) as "floppy" | "erect" | "semi" | null | undefined,
+                  tailType: (Option.isSome(photoResult)
+                    ? photoResult.value.tailType
+                    : dog.tailType) as "long" | "short" | "docked" | "curled" | null | undefined,
                   photos: dog.photos ? [...dog.photos] : [],
                   photosGenerated: dog.photosGenerated ? [...dog.photosGenerated] : [],
                   sourceUrl: dog.sourceUrl,
-                  urgent: dog.urgent ?? false,
+                  urgent: textResult?.urgent ?? dog.urgent ?? false,
                   status: "available",
                   lastSeenAt: now,
                   createdAt: now,
@@ -140,10 +215,13 @@ export default {
                 }),
               catch: (e) => new Error(`Failed to insert dog: ${e}`),
             })
-            reindexJobs.push({ type: "upsert", dogId: id, description: dog.description ?? undefined })
+            reindexJobs.push({
+              type: "upsert",
+              dogId: id,
+              description: bioResult?.bio ?? dog.description ?? undefined,
+            })
             added++
           } else {
-            // Existing dog - just update lastSeenAt (fingerprint matched = no changes)
             yield* Effect.tryPromise({
               try: () =>
                 db
@@ -155,7 +233,6 @@ export default {
           }
         }
 
-        // Mark dogs not seen in this scrape as removed
         for (const existing of existingDogs) {
           if (!scrapedFingerprints.has(existing.fingerprint)) {
             yield* Effect.tryPromise({
@@ -164,14 +241,13 @@ export default {
               catch: (e) => new Error(`Failed to mark dog removed: ${e}`),
             })
             reindexJobs.push({ type: "delete", dogId: existing.id })
-            removed++
           }
         }
 
         if (reindexJobs.length > 0) {
           yield* Effect.tryPromise({
             try: () =>
-              env.REINDEX_QUEUE.sendBatch(reindexJobs.map((job) => ({ body: job }))),
+              env.REINDEX_QUEUE.sendBatch(reindexJobs.map((j) => ({ body: j }))),
             catch: (e) => new Error(`Failed to enqueue reindex jobs: ${e}`),
           })
         }
@@ -183,7 +259,7 @@ export default {
               .set({
                 finishedAt: new Date(),
                 dogsAdded: added,
-                dogsUpdated: updated,
+                dogsUpdated: 0,
                 dogsRemoved: removed,
               })
               .where(eq(syncLogs.id, syncLogId)),
@@ -200,12 +276,21 @@ export default {
         })
 
         yield* Effect.logInfo(
-          `Sync complete for ${job.shelterId}: +${added} ~${updated} -${removed}`
+          `Sync complete for ${job.shelterId}: +${added} -${removed}`
         )
 
         message.ack()
       }).pipe(
-        Effect.provide(FetchHttpClient.layer),
+        Effect.provide(
+          Layer.mergeAll(
+            FetchHttpClient.layer,
+            Layer.provide(
+              Layer.mergeAll(TextExtractorLive, PhotoAnalyzerLive, DescriptionGeneratorLive),
+              OpenRouterClientLive
+            ),
+            OpenRouterClientLive
+          )
+        ),
         Effect.catchAll((error) =>
           Effect.gen(function* () {
             yield* Effect.logError(`Scrape failed: ${error}`)
