@@ -18,8 +18,8 @@ database_name = "dogpile-db"
 database_id = "TODO"
 
 [[r2_buckets]]
-binding = "IMAGES"
-bucket_name = "dogpile-images"
+binding = "PHOTOS_ORIGINAL"
+bucket_name = "dogpile-photos-original"
 
 [[kv_namespaces]]
 binding = "KV"

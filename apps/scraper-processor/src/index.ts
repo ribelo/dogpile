@@ -9,13 +9,13 @@ import { createHash } from "./utils/hash.js"
 interface Env {
   DB: D1Database
   KV: KVNamespace
-  IMAGES: R2Bucket
+  PHOTOS_ORIGINAL: R2Bucket
   REINDEX_QUEUE: Queue<ReindexJob>
 }
 
 interface ScrapeJob {
   shelterId: string
-  scraperId: string
+  shelterSlug: string
   baseUrl: string
 }
 
@@ -36,10 +36,10 @@ export default {
 
       const program = Effect.gen(function* () {
         const db = drizzle(env.DB)
-        const adapter = getAdapter(job.scraperId)
+        const adapter = getAdapter(job.shelterSlug)
 
         if (!adapter) {
-          yield* Effect.logError(`Unknown scraper: ${job.scraperId}`)
+          yield* Effect.logError(`Unknown scraper: ${job.shelterSlug}`)
           message.ack()
           return
         }
@@ -102,14 +102,35 @@ export default {
                   shelterId: dog.shelterId,
                   externalId: dog.externalId,
                   name: dog.name,
-                  breed: dog.breed,
-                  ageMonths: dog.ageMonths,
-                  size: dog.size,
-                  sex: dog.sex,
+                  sex: dog.sex as "male" | "female" | "unknown" | null | undefined,
                   description: dog.description,
-                  personalityTags: [...dog.personalityTags],
-                  photos: [...dog.photos],
-                  urgent: dog.urgent,
+                  locationName: dog.locationName,
+                  locationCity: dog.locationCity,
+                  locationLat: dog.locationLat,
+                  locationLng: dog.locationLng,
+                  isFoster: dog.isFoster,
+                  breedEstimates: dog.breedEstimates ? [...dog.breedEstimates] : [],
+                  sizeEstimate: dog.sizeEstimate,
+                  ageEstimate: dog.ageEstimate,
+                  weightEstimate: dog.weightEstimate,
+                  personalityTags: dog.personalityTags ? [...dog.personalityTags] : [],
+                  vaccinated: dog.vaccinated,
+                  sterilized: dog.sterilized,
+                  chipped: dog.chipped,
+                  goodWithKids: dog.goodWithKids,
+                  goodWithDogs: dog.goodWithDogs,
+                  goodWithCats: dog.goodWithCats,
+                  furLength: dog.furLength as "short" | "medium" | "long" | null | undefined,
+                  furType: dog.furType as "smooth" | "wire" | "curly" | "double" | null | undefined,
+                  colorPrimary: dog.colorPrimary,
+                  colorSecondary: dog.colorSecondary,
+                  colorPattern: dog.colorPattern as "solid" | "spotted" | "brindle" | "merle" | "bicolor" | "tricolor" | "sable" | "tuxedo" | null | undefined,
+                  earType: dog.earType as "floppy" | "erect" | "semi" | null | undefined,
+                  tailType: dog.tailType as "long" | "short" | "docked" | "curled" | null | undefined,
+                  photos: dog.photos ? [...dog.photos] : [],
+                  photosGenerated: dog.photosGenerated ? [...dog.photosGenerated] : [],
+                  sourceUrl: dog.sourceUrl,
+                  urgent: dog.urgent ?? false,
                   status: "available",
                   checksum,
                   createdAt: now,
@@ -126,14 +147,35 @@ export default {
                   .update(dogs)
                   .set({
                     name: dog.name,
-                    breed: dog.breed,
-                    ageMonths: dog.ageMonths,
-                    size: dog.size,
-                    sex: dog.sex,
+                    sex: dog.sex as "male" | "female" | "unknown" | null | undefined,
                     description: dog.description,
-                    personalityTags: [...dog.personalityTags],
-                    photos: [...dog.photos],
-                    urgent: dog.urgent,
+                    locationName: dog.locationName,
+                    locationCity: dog.locationCity,
+                    locationLat: dog.locationLat,
+                    locationLng: dog.locationLng,
+                    isFoster: dog.isFoster,
+                    breedEstimates: dog.breedEstimates ? [...dog.breedEstimates] : [],
+                    sizeEstimate: dog.sizeEstimate,
+                    ageEstimate: dog.ageEstimate,
+                    weightEstimate: dog.weightEstimate,
+                    personalityTags: dog.personalityTags ? [...dog.personalityTags] : [],
+                    vaccinated: dog.vaccinated,
+                    sterilized: dog.sterilized,
+                    chipped: dog.chipped,
+                    goodWithKids: dog.goodWithKids,
+                    goodWithDogs: dog.goodWithDogs,
+                    goodWithCats: dog.goodWithCats,
+                    furLength: dog.furLength as "short" | "medium" | "long" | null | undefined,
+                    furType: dog.furType as "smooth" | "wire" | "curly" | "double" | null | undefined,
+                    colorPrimary: dog.colorPrimary,
+                    colorSecondary: dog.colorSecondary,
+                    colorPattern: dog.colorPattern as "solid" | "spotted" | "brindle" | "merle" | "bicolor" | "tricolor" | "sable" | "tuxedo" | null | undefined,
+                    earType: dog.earType as "floppy" | "erect" | "semi" | null | undefined,
+                    tailType: dog.tailType as "long" | "short" | "docked" | "curled" | null | undefined,
+                    photos: dog.photos ? [...dog.photos] : [],
+                    photosGenerated: dog.photosGenerated ? [...dog.photosGenerated] : [],
+                    sourceUrl: dog.sourceUrl,
+                    urgent: dog.urgent ?? false,
                     checksum,
                     updatedAt: new Date(),
                   })

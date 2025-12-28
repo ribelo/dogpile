@@ -13,8 +13,12 @@ binding = "KV"
 id = "TODO"
 
 [[r2_buckets]]
-binding = "IMAGES"
-bucket_name = "dogpile-images"
+binding = "PHOTOS_ORIGINAL"
+bucket_name = "dogpile-photos-original"
+
+[[r2_buckets]]
+binding = "PHOTOS_GENERATED"
+bucket_name = "dogpile-photos-generated"
 
 [[vectorize]]
 binding = "VECTORIZE"

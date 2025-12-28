@@ -3,7 +3,8 @@ import { Effect } from "effect"
 interface Env {
   DB: D1Database
   KV: KVNamespace
-  IMAGES: R2Bucket
+  PHOTOS_ORIGINAL: R2Bucket
+  PHOTOS_GENERATED: R2Bucket
   VECTORIZE: VectorizeIndex
   ENVIRONMENT: string
 }

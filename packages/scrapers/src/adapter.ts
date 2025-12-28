@@ -1,5 +1,5 @@
 import { Effect } from "effect"
-import type { CreateDog } from "@dogpile/core"
+import type { CreateDogInput } from "@dogpile/core"
 import type { HttpClient } from "@effect/platform"
 import { ScrapeError, ParseError } from "@dogpile/core"
 
@@ -27,7 +27,7 @@ export interface ShelterAdapter {
   readonly name: string
   readonly fetch: (config: ScraperConfig) => Effect.Effect<string, ScrapeError, HttpClient.HttpClient>
   readonly parse: (html: string, config: ScraperConfig) => Effect.Effect<readonly RawDogData[], ParseError>
-  readonly transform: (raw: RawDogData, config: ScraperConfig) => Effect.Effect<CreateDog, ParseError>
+  readonly transform: (raw: RawDogData, config: ScraperConfig) => Effect.Effect<CreateDogInput, ParseError>
 }
 
 export const createAdapter = (adapter: ShelterAdapter): ShelterAdapter => adapter

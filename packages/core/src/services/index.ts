@@ -1,5 +1,6 @@
 export * from "./embedding.js"
-export * from "./dog-repository.js"
+export { DogRepository, makeDogRepository, type CreateDogInput, type DogFilters, type DogRepository as DogRepositoryType } from "./dog-repository.js"
 export * from "./shelter-repository.js"
 export * from "./vector-store.js"
 export * from "./image-store.js"
+export * from "./ai-extraction.js"

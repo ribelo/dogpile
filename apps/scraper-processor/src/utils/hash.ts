@@ -1,13 +1,13 @@
-import type { CreateDog } from "@dogpile/core"
+import type { CreateDogInput } from "@dogpile/core"
 
-export const createHash = (dog: CreateDog): string => {
+export const createHash = (dog: CreateDogInput): string => {
   const content = JSON.stringify({
     name: dog.name,
-    breed: dog.breed,
-    ageMonths: dog.ageMonths,
-    size: dog.size,
     sex: dog.sex,
     description: dog.description,
+    breedEstimates: dog.breedEstimates,
+    sizeEstimate: dog.sizeEstimate,
+    ageEstimate: dog.ageEstimate,
     personalityTags: dog.personalityTags,
     photos: dog.photos,
     urgent: dog.urgent,

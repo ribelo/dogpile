@@ -1,15 +1,32 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core"
+import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core"
+
+// Breed enum values for reference
+export const BREED_VALUES = [
+  "owczarek_niemiecki", "owczarek_belgijski", "owczarek_podhalanski", "owczarek_szetlandzki",
+  "labrador", "golden_retriever", "husky", "malamut", "bernardyn", "nowofundland",
+  "dog_niemiecki", "rottweiler", "doberman", "bokser", "amstaf", "pitbull", "cane_corso", "akita",
+  "border_collie", "beagle", "cocker_spaniel", "springer_spaniel", "seter", "pointer",
+  "buldog", "basenji", "shiba", "chow_chow", "shar_pei", "dalmatynczyk",
+  "jamnik", "jack_russell", "fox_terrier", "west_highland_terrier", "yorkshire_terrier",
+  "maltanczyk", "shih_tzu", "pekinczyk", "mops", "buldog_francuski", "chihuahua",
+  "pomeranian", "cavalier", "bichon", "pudel", "miniatura_schnauzer",
+  "gonczy_polski", "ogar_polski", "chart_polski",
+  "kundelek", "mieszaniec", "nieznana",
+] as const
 
 export const shelters = sqliteTable("shelters", {
   id: text("id").primaryKey(),
-  name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
   url: text("url").notNull(),
   city: text("city").notNull(),
   region: text("region"),
-  scraperId: text("scraper_id").notNull(),
-  lastSync: integer("last_sync", { mode: "timestamp" }),
+  lat: real("lat"),
+  lng: real("lng"),
+  phone: text("phone"),
+  email: text("email"),
   status: text("status", { enum: ["active", "inactive", "error"] }).notNull().default("active"),
+  lastSync: integer("last_sync", { mode: "timestamp" }),
 }, (table) => [
   index("shelters_slug_idx").on(table.slug),
   index("shelters_status_idx").on(table.status),
@@ -19,25 +36,64 @@ export const dogs = sqliteTable("dogs", {
   id: text("id").primaryKey(),
   shelterId: text("shelter_id").notNull().references(() => shelters.id, { onDelete: "cascade" }),
   externalId: text("external_id").notNull(),
+
+  // Basic (from text extraction)
   name: text("name").notNull(),
-  breed: text("breed"),
-  ageMonths: integer("age_months"),
-  size: text("size", { enum: ["small", "medium", "large"] }),
-  sex: text("sex", { enum: ["male", "female", "unknown"] }).notNull().default("unknown"),
+  sex: text("sex", { enum: ["male", "female", "unknown"] }),
   description: text("description"),
+
+  // Location (where dog physically is)
+  locationName: text("location_name"),
+  locationCity: text("location_city"),
+  locationLat: real("location_lat"),
+  locationLng: real("location_lng"),
+  isFoster: integer("is_foster", { mode: "boolean" }),
+
+  // AI estimations (JSON)
+  breedEstimates: text("breed_estimates", { mode: "json" }).$type<{ breed: string; confidence: number }[]>().notNull().default([]),
+  sizeEstimate: text("size_estimate", { mode: "json" }).$type<{ value: string; confidence: number } | null>(),
+  ageEstimate: text("age_estimate", { mode: "json" }).$type<{ months: number; confidence: number; rangeMin: number; rangeMax: number } | null>(),
+  weightEstimate: text("weight_estimate", { mode: "json" }).$type<{ kg: number; confidence: number; rangeMin: number; rangeMax: number } | null>(),
+
+  // AI text extraction
   personalityTags: text("personality_tags", { mode: "json" }).$type<string[]>().notNull().default([]),
+
+  // Health (often missing)
+  vaccinated: integer("vaccinated", { mode: "boolean" }),
+  sterilized: integer("sterilized", { mode: "boolean" }),
+  chipped: integer("chipped", { mode: "boolean" }),
+
+  // Compatibility (often missing)
+  goodWithKids: integer("good_with_kids", { mode: "boolean" }),
+  goodWithDogs: integer("good_with_dogs", { mode: "boolean" }),
+  goodWithCats: integer("good_with_cats", { mode: "boolean" }),
+
+  // AI photo extraction
+  furLength: text("fur_length", { enum: ["short", "medium", "long"] }),
+  furType: text("fur_type", { enum: ["smooth", "wire", "curly", "double"] }),
+  colorPrimary: text("color_primary"),
+  colorSecondary: text("color_secondary"),
+  colorPattern: text("color_pattern", { enum: ["solid", "spotted", "brindle", "merle", "bicolor", "tricolor", "sable", "tuxedo"] }),
+  earType: text("ear_type", { enum: ["floppy", "erect", "semi"] }),
+  tailType: text("tail_type", { enum: ["long", "short", "docked", "curled"] }),
+
+  // Photos (R2 keys)
   photos: text("photos", { mode: "json" }).$type<string[]>().notNull().default([]),
-  status: text("status", { enum: ["available", "adopted", "reserved", "removed"] }).notNull().default("available"),
+  photosGenerated: text("photos_generated", { mode: "json" }).$type<string[]>().notNull().default([]),
+
+  // Meta
+  sourceUrl: text("source_url"),
   urgent: integer("urgent", { mode: "boolean" }).notNull().default(false),
+  status: text("status", { enum: ["available", "adopted", "reserved", "removed"] }).notNull().default("available"),
+  checksum: text("checksum").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
-  checksum: text("checksum").notNull(),
 }, (table) => [
   index("dogs_shelter_id_idx").on(table.shelterId),
   index("dogs_shelter_external_idx").on(table.shelterId, table.externalId),
   index("dogs_status_idx").on(table.status),
-  index("dogs_city_idx").on(table.shelterId),
   index("dogs_urgent_idx").on(table.urgent),
+  index("dogs_location_city_idx").on(table.locationCity),
 ])
 
 export const syncLogs = sqliteTable("sync_logs", {

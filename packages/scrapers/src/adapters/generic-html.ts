@@ -2,7 +2,7 @@ import { Effect } from "effect"
 import { HttpClient } from "@effect/platform"
 import { parseHTML } from "linkedom"
 import { createAdapter, type RawDogData, type ScraperConfig } from "../adapter.js"
-import { ScrapeError, ParseError, type CreateDog } from "@dogpile/core"
+import { ScrapeError, ParseError, type CreateDogInput } from "@dogpile/core"
 
 export const genericHtmlAdapter = createAdapter({
   id: "generic-html",
@@ -41,13 +41,10 @@ export const genericHtmlAdapter = createAdapter({
       shelterId: config.shelterId,
       externalId: raw.externalId,
       name: raw.name,
-      breed: raw.breed ?? null,
-      ageMonths: raw.ageMonths ?? null,
-      size: raw.size ?? null,
       sex: raw.sex ?? "unknown",
       description: raw.description ?? null,
       personalityTags: raw.personalityTags ?? [],
       photos: raw.photos ?? [],
       urgent: raw.urgent ?? false,
-    } satisfies CreateDog),
+    } satisfies CreateDogInput),
 })

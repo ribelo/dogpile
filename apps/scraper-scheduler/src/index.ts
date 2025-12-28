@@ -11,7 +11,7 @@ interface Env {
 
 interface ScrapeJob {
   shelterId: string
-  scraperId: string
+  shelterSlug: string
   baseUrl: string
 }
 
@@ -45,7 +45,7 @@ export default {
 
       const jobs: ScrapeJob[] = dueShelters.map((shelter) => ({
         shelterId: shelter.id,
-        scraperId: shelter.scraperId,
+        shelterSlug: shelter.slug,
         baseUrl: shelter.url,
       }))
 

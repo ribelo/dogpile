@@ -5,14 +5,17 @@ export type ShelterStatus = typeof ShelterStatus.Type
 
 export const Shelter = Schema.Struct({
   id: Schema.String,
-  name: Schema.String,
   slug: Schema.String,
+  name: Schema.String,
   url: Schema.String,
   city: Schema.String,
   region: Schema.NullOr(Schema.String),
-  scraperId: Schema.String,
-  lastSync: Schema.NullOr(Schema.Date),
+  lat: Schema.NullOr(Schema.Number),
+  lng: Schema.NullOr(Schema.Number),
+  phone: Schema.NullOr(Schema.String),
+  email: Schema.NullOr(Schema.String),
   status: ShelterStatus,
+  lastSync: Schema.NullOr(Schema.Date),
 })
 
 export type Shelter = typeof Shelter.Type
