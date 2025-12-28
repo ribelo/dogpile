@@ -1,0 +1,19 @@
+name = "dogpile-embedder"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[queues.consumers]]
+queue = "dogpile-reindex-jobs"
+max_batch_size = 10
+max_retries = 3
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "dogpile-dogs"
+
+[vars]
+OPENROUTER_MODEL = "google/gemini-embedding-001"
+
+[secrets]
+# OPENROUTER_API_KEY - set via wrangler secret put

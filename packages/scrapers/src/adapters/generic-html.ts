@@ -1,0 +1,53 @@
+import { Effect } from "effect"
+import { HttpClient } from "@effect/platform"
+import { parseHTML } from "linkedom"
+import { createAdapter, type RawDogData, type ScraperConfig } from "../adapter.js"
+import { ScrapeError, ParseError, type CreateDog } from "@dogpile/core"
+
+export const genericHtmlAdapter = createAdapter({
+  id: "generic-html",
+  name: "Generic HTML Scraper",
+
+  fetch: (config: ScraperConfig) =>
+    Effect.gen(function* () {
+      const client = yield* HttpClient.HttpClient
+      const response = yield* client.get(config.baseUrl).pipe(Effect.scoped)
+      const text = yield* response.text
+      return text
+    }).pipe(
+      Effect.mapError((cause) => new ScrapeError({
+        shelterId: config.shelterId,
+        cause,
+        message: `Failed to fetch ${config.baseUrl}`,
+      }))
+    ),
+
+  parse: (html: string, config: ScraperConfig) =>
+    Effect.try({
+      try: () => {
+        const { document } = parseHTML(html)
+        const dogs: RawDogData[] = []
+        return dogs as readonly RawDogData[]
+      },
+      catch: (cause) => new ParseError({
+        shelterId: config.shelterId,
+        cause,
+        message: "Failed to parse HTML",
+      }),
+    }),
+
+  transform: (raw: RawDogData, config: ScraperConfig) =>
+    Effect.succeed({
+      shelterId: config.shelterId,
+      externalId: raw.externalId,
+      name: raw.name,
+      breed: raw.breed ?? null,
+      ageMonths: raw.ageMonths ?? null,
+      size: raw.size ?? null,
+      sex: raw.sex ?? "unknown",
+      description: raw.description ?? null,
+      personalityTags: raw.personalityTags ?? [],
+      photos: raw.photos ?? [],
+      urgent: raw.urgent ?? false,
+    } satisfies CreateDog),
+})

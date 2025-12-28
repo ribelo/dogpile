@@ -1,0 +1,14 @@
+---
+import Layout from "@/layouts/Layout.astro"
+import Hero from "@/components/Hero.astro"
+import DogGrid from "@/components/DogGrid"
+import Footer from "@/components/Footer.astro"
+---
+
+<Layout title="The Pile is Waiting">
+  <Hero />
+  <main class="max-w-7xl mx-auto px-4 py-12">
+    <DogGrid client:load />
+  </main>
+  <Footer />
+</Layout>

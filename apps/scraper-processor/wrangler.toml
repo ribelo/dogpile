@@ -1,0 +1,26 @@
+name = "dogpile-scraper-processor"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[queues.consumers]]
+queue = "dogpile-scrape-jobs"
+max_batch_size = 1
+max_retries = 3
+
+[[queues.producers]]
+binding = "REINDEX_QUEUE"
+queue = "dogpile-reindex-jobs"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dogpile-db"
+database_id = "TODO"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "dogpile-images"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "TODO"

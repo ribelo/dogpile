@@ -1,0 +1,19 @@
+name = "dogpile-scraper-scheduler"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["0 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dogpile-db"
+database_id = "TODO"
+
+[[queues.producers]]
+binding = "SCRAPE_QUEUE"
+queue = "dogpile-scrape-jobs"
+
+[vars]
+SYNC_INTERVAL_MINUTES = "60"

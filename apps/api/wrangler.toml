@@ -1,0 +1,24 @@
+name = "dogpile-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dogpile-db"
+database_id = "TODO"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "TODO"
+
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "dogpile-images"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "dogpile-dogs"
+
+[vars]
+ENVIRONMENT = "development"

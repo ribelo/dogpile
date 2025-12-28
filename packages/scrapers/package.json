@@ -1,0 +1,21 @@
+{
+  "name": "@dogpile/scrapers",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dogpile/core": "workspace:*",
+    "effect": "^3.19.13",
+    "@effect/platform": "^0.94.0",
+    "linkedom": "^0.18.9"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

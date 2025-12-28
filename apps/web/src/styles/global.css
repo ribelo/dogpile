@@ -1,0 +1,66 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;600;800&family=Quicksand:wght@400;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-sys-paper-base text-sys-ink-primary font-narrative;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-title lowercase;
+  }
+}
+
+@layer components {
+  .paper-edge {
+    border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+    box-shadow: 
+      4px 4px 0 theme("colors.sys.paper.shadow"),
+      8px 8px 0 rgba(0, 0, 0, 0.03);
+  }
+
+  .paper-edge-alt {
+    border-radius: 15px 255px 15px 225px / 225px 15px 255px 15px;
+  }
+
+  .btn-primary {
+    @apply bg-sys-heart-core text-white font-bold py-3 px-6 paper-edge;
+    @apply hover:scale-105 hover:shadow-lg transition-all duration-300;
+  }
+
+  .btn-secondary {
+    @apply bg-sys-paper-card text-sys-ink-primary font-bold py-3 px-6 paper-edge;
+    @apply border-2 border-sys-paper-shadow;
+    @apply hover:bg-sys-cheek-blush transition-all duration-300;
+  }
+
+  .card {
+    @apply bg-sys-paper-card p-4 paper-edge;
+    @apply transition-transform duration-300 hover:-translate-y-2;
+  }
+
+  .tag {
+    @apply px-2 py-1 text-xs font-bold rounded-lg;
+  }
+
+  .tag-sky {
+    @apply tag bg-sys-nature-sky/30 text-sys-ink-primary/80;
+  }
+
+  .tag-grass {
+    @apply tag bg-sys-nature-grass/30 text-sys-ink-primary/80;
+  }
+
+  .tag-urgent {
+    @apply tag bg-sys-state-urgent text-white;
+  }
+}
+
+@layer utilities {
+  .nostalgia-img {
+    filter: contrast(0.95) brightness(1.02);
+  }
+}
