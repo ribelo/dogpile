@@ -1,0 +1,85 @@
+import { Context, Data, Effect, Layer, Schema } from "effect"
+import { OpenRouterClient } from "./openrouter/client.js"
+import { aiConfig } from "../config/ai.js"
+import { DogBioSchema, type DogBio } from "../schemas/dog-bio.js"
+import { toJsonSchema } from "../schemas/json-schema.js"
+import promptTemplate from "../../prompts/description-gen.md" with { type: "text" }
+
+export class GenerationError extends Data.TaggedError("GenerationError")<{
+  readonly cause: unknown
+  readonly message: string
+}> {}
+
+export interface DogData {
+  readonly name: string
+  readonly sex: string | null
+  readonly breedEstimates: readonly { breed: string; confidence: number }[]
+  readonly ageMonths: number | null
+  readonly size: string | null
+  readonly personalityTags: readonly string[]
+  readonly goodWithKids: boolean | null
+  readonly goodWithDogs: boolean | null
+  readonly goodWithCats: boolean | null
+  readonly healthInfo: { vaccinated: boolean | null; sterilized: boolean | null }
+}
+
+export interface DescriptionGenerator {
+  readonly generate: (dogData: DogData) => Effect.Effect<DogBio, GenerationError>
+}
+
+export const DescriptionGenerator = Context.GenericTag<DescriptionGenerator>(
+  "@dogpile/DescriptionGenerator"
+)
+
+export const DescriptionGeneratorLive = Layer.effect(
+  DescriptionGenerator,
+  Effect.gen(function* () {
+    const client = yield* OpenRouterClient
+    const config = yield* aiConfig
+
+    return {
+      generate: (dogData: DogData) =>
+        Effect.gen(function* () {
+          const prompt = promptTemplate.replace(
+            "{{DOG_DATA}}",
+            JSON.stringify(dogData, null, 2)
+          )
+
+          const response = yield* client.responses({
+            model: config.descriptionGenModel,
+            input: prompt,
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "dog_bio",
+                strict: true,
+                schema: toJsonSchema(DogBioSchema),
+              },
+            },
+            reasoning: { effort: "medium" },
+          }).pipe(
+            Effect.mapError((e) => new GenerationError({ cause: e, message: String(e) }))
+          )
+
+          const textContent = response.output[0]?.content[0]?.text
+          if (!textContent) {
+            return yield* Effect.fail(
+              new GenerationError({ cause: null, message: "No text in response" })
+            )
+          }
+
+          const json = yield* Effect.try({
+            try: () => JSON.parse(textContent),
+            catch: (e) =>
+              new GenerationError({ cause: e, message: "Failed to parse JSON response" }),
+          })
+
+          return yield* Schema.decodeUnknown(DogBioSchema)(json).pipe(
+            Effect.mapError((e) =>
+              new GenerationError({ cause: e, message: "Validation failed" })
+            )
+          )
+        }),
+    }
+  })
+)

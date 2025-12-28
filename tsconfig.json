@@ -15,7 +15,7 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "lib": ["ESNext"],
-    "types": ["bun-types"]
+    "types": ["@types/bun"]
   },
   "exclude": ["node_modules", "dist"]
 }
