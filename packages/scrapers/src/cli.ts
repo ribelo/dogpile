@@ -275,7 +275,7 @@ const processCommand = (scraperId: string) =>
         let generatedPhotoUrl: string | null = null
         if (bio?.bio && getBoolFlag(parsed.flags, "generate-photos")) {
           yield* Console.log(`   🎨 Generating nose photo...`)
-          const imgResult = yield* imageGenerator.generateNosePhoto(bio.bio).pipe(
+          const imgResult = yield* imageGenerator.generateNosePhoto({ dogDescription: bio.bio, referencePhotoUrl: dog.photos?.[0] }).pipe(
             Effect.catchAll((e) => {
               console.log(`   ⚠️ Image gen failed: ${e.message}`)
               return Effect.succeed(null)

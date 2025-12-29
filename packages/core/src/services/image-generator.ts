@@ -1,14 +1,20 @@
 import { Context, Effect, Layer } from "effect"
 import { OpenRouterClient } from "./openrouter/client.js"
 import { aiConfig } from "../config/ai.js"
+import type { ChatMessage } from "./openrouter/types.js"
 
 export interface ImageGeneratorOutput {
   readonly base64Url: string
 }
 
+export interface GenerateNosePhotoInput {
+  readonly dogDescription: string
+  readonly referencePhotoUrl?: string
+}
+
 export interface ImageGenerator {
   readonly generateNosePhoto: (
-    dogDescription: string
+    input: GenerateNosePhotoInput
   ) => Effect.Effect<ImageGeneratorOutput | null, Error>
 }
 
@@ -23,16 +29,33 @@ export const ImageGeneratorLive = Layer.effect(
     const config = yield* aiConfig
 
     return {
-      generateNosePhoto: (dogDescription: string) =>
+      generateNosePhoto: (input: GenerateNosePhotoInput) =>
         Effect.gen(function* () {
-          const prompt = `Generate a cute, funny fisheye lens close-up photo of this dog's nose. The dog: ${dogDescription}. Style: Close-up macro shot of the nose taking up most of the frame, with the face slightly distorted in fisheye style. High quality, studio lighting, white/neutral background.`
+          const textPrompt = `Generate a cute, funny fisheye lens close-up photo of this dog's nose based on the reference photo. The dog: ${input.dogDescription}. Style: Close-up macro shot of the nose taking up most of the frame, with the face slightly distorted in fisheye style. High quality, studio lighting, white/neutral background.`
+
+          // Build message content - include reference image if provided
+          const messageContent: ChatMessage["content"] = input.referencePhotoUrl
+            ? [
+                {
+                  type: "image_url" as const,
+                  image_url: {
+                    url: input.referencePhotoUrl,
+                    detail: "high" as const,
+                  },
+                },
+                {
+                  type: "text" as const,
+                  text: textPrompt,
+                },
+              ]
+            : textPrompt
 
           const result = yield* client.chatCompletions({
             model: config.imageGenerationModel,
             messages: [
               {
                 role: "user",
-                content: prompt,
+                content: messageContent,
               },
             ],
             modalities: ["image", "text"],
