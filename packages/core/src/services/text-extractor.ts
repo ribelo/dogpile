@@ -7,6 +7,7 @@ import { toJsonSchema } from "../schemas/json-schema.js"
 import { BREEDS } from "../domain/breed.js"
 import { ExtractionError } from "./ai-extraction.js"
 import promptTemplate from "../../prompts/text-extraction.md" with { type: "text" }
+import type { ChatMessage } from "./openrouter/types.js"
 
 export interface TextExtractor {
   readonly extract: (rawDescription: string) => Effect.Effect<TextExtraction, ExtractionError>
@@ -27,10 +28,14 @@ export const TextExtractorLive = Layer.effect(
             .replace("{{RAW_DESCRIPTION}}", rawDescription)
             .replace("{{BREED_LIST}}", BREEDS.join(", "))
 
-          const response = yield* client.responses({
+          const messages: ChatMessage[] = [
+            { role: "system", content: "Extract structured data from the adoption listing. Return valid JSON only." },
+            { role: "user", content: prompt },
+          ]
+
+          const response = yield* client.chatCompletions({
             model: config.textExtractionModel,
-            input: prompt,
-            instructions: "Extract structured data from the adoption listing",
+            messages,
             response_format: {
               type: "json_schema",
               json_schema: {
@@ -39,12 +44,11 @@ export const TextExtractorLive = Layer.effect(
                 schema: toJsonSchema(TextExtractionSchema),
               },
             },
-            reasoning: { effort: "medium" },
           }).pipe(
             Effect.mapError((e) => new ExtractionError("text", e, String(e)))
           )
 
-          const textContent = response.output[0]?.content[0]?.text
+          const textContent = response.choices[0]?.message?.content
           if (!textContent) {
             return yield* Effect.fail(new ExtractionError("text", null, "No text in response"))
           }

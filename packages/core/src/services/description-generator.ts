@@ -4,6 +4,7 @@ import { aiConfig } from "../config/ai.js"
 import { DogBioSchema, type DogBio } from "../schemas/dog-bio.js"
 import { toJsonSchema } from "../schemas/json-schema.js"
 import promptTemplate from "../../prompts/description-gen.md" with { type: "text" }
+import type { ChatMessage } from "./openrouter/types.js"
 
 export class GenerationError extends Data.TaggedError("GenerationError")<{
   readonly cause: unknown
@@ -45,9 +46,14 @@ export const DescriptionGeneratorLive = Layer.effect(
             JSON.stringify(dogData, null, 2)
           )
 
-          const response = yield* client.responses({
+          const messages: ChatMessage[] = [
+            { role: "system", content: "Generate a warm, engaging dog bio in Polish. Return valid JSON only." },
+            { role: "user", content: prompt },
+          ]
+
+          const response = yield* client.chatCompletions({
             model: config.descriptionGenModel,
-            input: prompt,
+            messages,
             response_format: {
               type: "json_schema",
               json_schema: {
@@ -56,12 +62,11 @@ export const DescriptionGeneratorLive = Layer.effect(
                 schema: toJsonSchema(DogBioSchema),
               },
             },
-            reasoning: { effort: "medium" },
           }).pipe(
             Effect.mapError((e) => new GenerationError({ cause: e, message: String(e) }))
           )
 
-          const textContent = response.output[0]?.content[0]?.text
+          const textContent = response.choices[0]?.message?.content
           if (!textContent) {
             return yield* Effect.fail(
               new GenerationError({ cause: null, message: "No text in response" })

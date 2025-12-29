@@ -6,6 +6,7 @@ import { toJsonSchema } from "../schemas/json-schema.js"
 import { BREEDS } from "../domain/breed.js"
 import { ExtractionError } from "./ai-extraction.js"
 import promptTemplate from "../../prompts/photo-analysis.md" with { type: "text" }
+import type { ChatMessage } from "./openrouter/types.js"
 
 export interface PhotoAnalyzer {
   readonly analyze: (photoUrl: string) => Effect.Effect<PhotoExtraction, ExtractionError>
@@ -25,22 +26,24 @@ export const PhotoAnalyzerLive = Layer.effect(
     const doAnalyze = (imageUrls: readonly string[]) =>
       Effect.gen(function* () {
         const imageContent = imageUrls.map((url) => ({
-          type: "input_image" as const,
-          image_url: url,
+          type: "image_url" as const,
+          image_url: { url },
         }))
 
-        const response = yield* client.responses({
+        const messages: ChatMessage[] = [
+          { role: "system", content: "Analyze the dog photo(s) and extract structured data. Return valid JSON only." },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              ...imageContent,
+            ],
+          },
+        ]
+
+        const response = yield* client.chatCompletions({
           model: config.photoAnalysisModel,
-          input: [
-            {
-              type: "message",
-              role: "user",
-              content: [
-                { type: "input_text", text: prompt },
-                ...imageContent,
-              ],
-            },
-          ],
+          messages,
           response_format: {
             type: "json_schema",
             json_schema: {
@@ -49,12 +52,11 @@ export const PhotoAnalyzerLive = Layer.effect(
               schema: toJsonSchema(PhotoExtractionSchema),
             },
           },
-          reasoning: { effort: "medium" },
         }).pipe(
           Effect.mapError((e) => new ExtractionError("photo", e, String(e)))
         )
 
-        const textContent = response.output[0]?.content[0]?.text
+        const textContent = response.choices[0]?.message?.content
         if (!textContent) {
           return yield* Effect.fail(new ExtractionError("photo", null, "No text in response"))
         }

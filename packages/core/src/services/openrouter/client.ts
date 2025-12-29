@@ -1,5 +1,5 @@
 import { Config, Context, Effect, Layer, Schedule, Redacted } from "effect"
-import type { ResponsesRequest, ResponsesResult, EmbeddingsRequest, EmbeddingsResult } from "./types.js"
+import type { ResponsesRequest, ResponsesResult, EmbeddingsRequest, EmbeddingsResult, ChatCompletionsRequest, ChatCompletionsResult } from "./types.js"
 import { NetworkError, OpenRouterError, RateLimitError } from "./errors.js"
 
 export interface OpenRouterClient {
@@ -9,6 +9,9 @@ export interface OpenRouterClient {
   readonly embeddings: (
     request: EmbeddingsRequest
   ) => Effect.Effect<EmbeddingsResult, OpenRouterError | RateLimitError | NetworkError>
+  readonly chatCompletions: (
+    request: ChatCompletionsRequest
+  ) => Effect.Effect<ChatCompletionsResult, OpenRouterError | RateLimitError | NetworkError>
 }
 
 export const OpenRouterClient = Context.GenericTag<OpenRouterClient>(
@@ -119,6 +122,7 @@ export const OpenRouterClientLive = Layer.effect(
     return {
       responses: (request) => call<ResponsesResult>("/responses", request),
       embeddings: (request) => call<EmbeddingsResult>("/embeddings", request),
+      chatCompletions: (request) => call<ChatCompletionsResult>("/chat/completions", request),
     }
   })
 )
