@@ -1,5 +1,3 @@
-[install]
-peer = true
-
 [run]
-bun = true
+# Don't use bun runtime for wrangler
+bun = false

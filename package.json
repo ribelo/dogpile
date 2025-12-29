@@ -6,7 +6,10 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter '*' dev",
+    "dev": "bun run dev:api & bun run dev:web",
+    "dev:api": "bun run --filter @dogpile/api dev",
+    "dev:web": "bun run --filter @dogpile/web dev",
+    "dev:all": "bun run --filter '*' dev",
     "build": "bun run --filter '*' build",
     "test": "bun test",
     "lint": "bun run --filter '*' lint",

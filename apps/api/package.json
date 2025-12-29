@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "bunx wrangler dev --local --port 8787 --inspector-port 9230",
     "build": "bun build src/index.ts --outdir dist --target browser --minify",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit"
