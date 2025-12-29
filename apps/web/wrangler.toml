@@ -1,0 +1,18 @@
+name = "dogpile-web"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Astro builds to dist/
+main = "dist/_worker.js"
+assets = { directory = "dist", binding = "ASSETS" }
+
+# KV for Astro sessions
+[[kv_namespaces]]
+binding = "SESSION"
+id = "53504d090fba4bdf8e2313da14b37720"
+
+[vars]
+API_URL = "https://dogpile-api.extropy.club"
+
+# Custom domain
+# routes = [{ pattern = "dogpile.extropy.club", custom_domain = true }]

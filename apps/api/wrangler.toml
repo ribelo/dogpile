@@ -6,19 +6,20 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "dogpile-db"
-database_id = "TODO"
+database_id = "ea4a4ec7-ad28-4219-a86f-5054bc79b21c"
+migrations_dir = "../../packages/db/migrations"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "TODO"
+id = "53504d090fba4bdf8e2313da14b37720"
 
 [[r2_buckets]]
 binding = "PHOTOS_ORIGINAL"
-bucket_name = "dogpile-photos-original"
+bucket_name = "dogpile"
 
 [[r2_buckets]]
 binding = "PHOTOS_GENERATED"
-bucket_name = "dogpile-photos-generated"
+bucket_name = "dogpile-generated"
 
 [[vectorize]]
 binding = "VECTORIZE"
