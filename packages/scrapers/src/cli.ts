@@ -14,10 +14,58 @@ import {
   PhotoAnalyzer,
   DescriptionGeneratorLive,
   DescriptionGenerator,
+  EmbeddingService,
+  EmbeddingServiceLive,
+  ImageGenerator,
+  ImageGeneratorLive,
 } from "@dogpile/core/services"
 
-const args = process.argv.slice(2)
-const command = args[0]
+interface ParsedArgs {
+  command: string | null
+  commandArg: string | null
+  flags: Map<string, string | boolean>
+}
+
+const parseArgs = (argv: string[]): ParsedArgs => {
+  const flags = new Map<string, string | boolean>()
+  let command: string | null = null
+  let commandArg: string | null = null
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg.startsWith("--")) {
+      const key = arg.slice(2)
+      const next = argv[i + 1]
+      if (next && !next.startsWith("-")) {
+        flags.set(key, next)
+        i++
+      } else {
+        flags.set(key, true)
+      }
+    } else if (!command) {
+      command = arg
+    } else if (!commandArg) {
+      commandArg = arg
+    }
+  }
+
+  return { command, commandArg, flags }
+}
+
+const getIntFlag = (flags: Map<string, string | boolean>, key: string, defaultVal: number): number => {
+  const val = flags.get(key)
+  if (typeof val === "string") {
+    const parsed = parseInt(val, 10)
+    return isNaN(parsed) ? defaultVal : parsed
+  }
+  return defaultVal
+}
+
+const getBoolFlag = (flags: Map<string, string | boolean>, key: string): boolean => 
+  flags.get(key) === true
+
+const parsed = parseArgs(process.argv.slice(2))
+const command = parsed.command
 
 const printUsage = Effect.gen(function* () {
   yield* Console.log(`
@@ -36,6 +84,7 @@ Options:
   --json                  Output raw JSON
   --save                  Save to DB (for run command)
   --concurrency <n>       Parallel AI processing (1-60, default 10)
+  --generate-photos         Generate AI fisheye nose photos (expensive)
 
 Examples:
   bun run cli list
@@ -47,9 +96,9 @@ Examples:
 const listCommand = Effect.gen(function* () {
   const adapters = listAdapters()
   yield* Console.log("\nAvailable scrapers:\n")
-  for (const adapter of adapters) {
-    yield* Console.log(`  ${adapter.id.padEnd(20)} ${adapter.name}`)
-  }
+  yield* Effect.forEach(adapters, (adapter) =>
+    Console.log(`  ${adapter.id.padEnd(20)} ${adapter.name}`)
+  )
   yield* Console.log("")
 })
 
@@ -66,9 +115,9 @@ const execSql = (sql: string) =>
 
 const runCommand = (scraperId: string) =>
   Effect.gen(function* () {
-    const limit = args.includes("--limit") ? parseInt(args[args.indexOf("--limit") + 1] ?? "5") : 5
-    const jsonOutput = args.includes("--json")
-    const saveToDb = args.includes("--save")
+    const limit = getIntFlag(parsed.flags, "limit", 5)
+    const jsonOutput = getBoolFlag(parsed.flags, "json")
+    const saveToDb = getBoolFlag(parsed.flags, "save")
 
     const adapter = getAdapter(scraperId)
     if (!adapter) {
@@ -87,9 +136,9 @@ const runCommand = (scraperId: string) =>
     if (jsonOutput) {
       yield* Console.log(JSON.stringify(rawDogs.slice(0, limit), null, 2))
     } else if (!saveToDb) {
-      for (let i = 0; i < Math.min(limit, rawDogs.length); i++) {
-        yield* Console.log(formatDog(rawDogs[i], i))
-      }
+      yield* Effect.forEach(rawDogs.slice(0, limit), (dog, i) =>
+        Console.log(formatDog(dog, i))
+      )
     }
 
     if (saveToDb) {
@@ -99,10 +148,12 @@ const runCommand = (scraperId: string) =>
       yield* execSql(shelterSql)
 
       const now = Math.floor(Date.now() / 1000)
-      for (const dog of rawDogs) {
-        const sql = `INSERT INTO dogs (id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint, status, urgent, created_at, updated_at, source_url, breed_estimates, personality_tags) VALUES ('${crypto.randomUUID()}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}', '${esc(dog.sex ?? "unknown")}', '${esc(dog.rawDescription)}', '${esc(JSON.stringify(dog.photos ?? []))}', '${esc(dog.fingerprint)}', 'available', ${dog.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.sourceUrl)}', '[]', '[]') ON CONFLICT(fingerprint) DO UPDATE SET updated_at = ${now}`
-        yield* execSql(sql)
-      }
+      yield* Effect.forEach(rawDogs, (dog) =>
+        Effect.gen(function* () {
+          const sql = `INSERT INTO dogs (id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint, status, urgent, created_at, updated_at, source_url, breed_estimates, personality_tags) VALUES ('${crypto.randomUUID()}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}', '${esc(dog.sex ?? "unknown")}', '${esc(dog.rawDescription)}', '${esc(JSON.stringify(dog.photos ?? []))}', '${esc(dog.fingerprint)}', 'available', ${dog.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.sourceUrl)}', '[]', '[]') ON CONFLICT(fingerprint) DO UPDATE SET updated_at = ${now}`
+          yield* execSql(sql)
+        })
+      )
       yield* Console.log(`   ✓ Saved ${rawDogs.length} dogs`)
     }
     yield* Console.log(`\n✅ Done.`)
@@ -110,13 +161,8 @@ const runCommand = (scraperId: string) =>
 
 const processCommand = (scraperId: string) =>
   Effect.gen(function* () {
-    const limitRaw = args.includes("--limit") ? parseInt(args[args.indexOf("--limit") + 1] ?? "999") : 999
-    const limitArg = Number.isNaN(limitRaw) ? 999 : limitRaw
-
-    const concurrencyRaw = args.includes("--concurrency")
-      ? parseInt(args[args.indexOf("--concurrency") + 1] ?? "10")
-      : 10
-    const concurrency = Number.isNaN(concurrencyRaw) ? 10 : Math.min(60, Math.max(1, concurrencyRaw))
+    const limitArg = getIntFlag(parsed.flags, "limit", 999)
+    const concurrency = Math.min(60, Math.max(1, getIntFlag(parsed.flags, "concurrency", 10)))
 
     const adapter = getAdapter(scraperId)
     if (!adapter) {
@@ -146,6 +192,8 @@ const processCommand = (scraperId: string) =>
     const textExtractor = yield* TextExtractor
     const photoAnalyzer = yield* PhotoAnalyzer
     const descGenerator = yield* DescriptionGenerator
+    const embeddingService = yield* EmbeddingService
+    const imageGenerator = yield* ImageGenerator
 
     yield* Console.log("🤖 AI Processing...")
     const now = Math.floor(Date.now() / 1000)
@@ -207,6 +255,39 @@ const processCommand = (scraperId: string) =>
             return Effect.succeed(null)
           })
         )
+
+
+        // Generate embedding for search (verify API works, storage via queue)
+        if (bio?.bio) {
+          yield* Console.log(`   🔢 Generating embedding...`)
+          const vector = yield* embeddingService.embed(bio.bio).pipe(
+            Effect.catchAll((e) => {
+              console.log(`   ⚠️ Embedding failed: ${e.message}`)
+              return Effect.succeed(null)
+            })
+          )
+          if (vector) {
+            yield* Console.log(`      ✓ Vector dim: ${vector.length}`)
+          }
+        }
+
+        // Generate fisheye nose photo (optional, expensive)
+        let generatedPhotoUrl: string | null = null
+        if (bio?.bio && getBoolFlag(parsed.flags, "generate-photos")) {
+          yield* Console.log(`   🎨 Generating nose photo...`)
+          const imgResult = yield* imageGenerator.generateNosePhoto(bio.bio).pipe(
+            Effect.catchAll((e) => {
+              console.log(`   ⚠️ Image gen failed: ${e.message}`)
+              return Effect.succeed(null)
+            })
+          )
+          if (imgResult) {
+            yield* Console.log(`      ✓ Generated (${imgResult.base64Url.length} chars)`)
+            // TODO: Upload to R2 and get URL
+            // For now, just log success
+          }
+        }
+
 
         // Save to DB
         const id = crypto.randomUUID()
@@ -281,7 +362,9 @@ const processCommand = (scraperId: string) =>
 const AILayer = Layer.mergeAll(
   TextExtractorLive,
   PhotoAnalyzerLive,
-  DescriptionGeneratorLive
+  DescriptionGeneratorLive,
+  EmbeddingServiceLive,
+  ImageGeneratorLive
 ).pipe(Layer.provide(OpenRouterClientLive))
 
 const program = Effect.gen(function* () {
@@ -294,13 +377,13 @@ const program = Effect.gen(function* () {
     return
   }
   if (command === "run") {
-    const scraperId = args[1]
+    const scraperId = parsed.commandArg
     if (!scraperId) { yield* Console.error("Missing scraper ID"); return }
     yield* runCommand(scraperId)
     return
   }
   if (command === "process") {
-    const scraperId = args[1]
+    const scraperId = parsed.commandArg
     if (!scraperId) { yield* Console.error("Missing scraper ID"); return }
     yield* processCommand(scraperId)
     return

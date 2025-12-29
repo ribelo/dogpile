@@ -32,6 +32,8 @@ dogpile/
 
 - **Runtime**: Bun for build, test, package management
 - **Backend**: Effect-TS for all async operations
+- **Backend**: Effect-TS for all async operations
+- **CLI**: Use `@effect/cli` for all command-line interfaces
 - **ORM**: Drizzle for D1 schema
 - **Frontend**: Astro + SolidJS + Tailwind
 - **Formatting**: 2-space indent, no semicolons (follow existing code)

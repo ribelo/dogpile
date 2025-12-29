@@ -7,7 +7,6 @@ export interface CreateDogInput {
   readonly externalId: string
   readonly name: string
   readonly sex?: string | null
-  readonly description?: string | null
   readonly locationName?: string | null
   readonly locationCity?: string | null
   readonly locationLat?: number | null

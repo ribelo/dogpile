@@ -158,6 +158,7 @@ export const ChatCompletionsRequest = Schema.Struct({
   temperature: Schema.optional(Schema.Number),
   top_p: Schema.optional(Schema.Number),
   response_format: Schema.optional(ResponseFormat),
+  modalities: Schema.optional(Schema.Array(Schema.Literal("text", "image"))),
 })
 
 export type ChatCompletionsRequest = typeof ChatCompletionsRequest.Type
@@ -167,6 +168,12 @@ export const ChatChoice = Schema.Struct({
   message: Schema.Struct({
     role: Schema.Literal("assistant"),
     content: Schema.NullOr(Schema.String),
+    images: Schema.optional(Schema.Array(Schema.Struct({
+      type: Schema.Literal("image_url"),
+      image_url: Schema.Struct({
+        url: Schema.String,
+      }),
+    }))),
   }),
   finish_reason: Schema.NullOr(Schema.String),
 })

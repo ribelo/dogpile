@@ -6,6 +6,7 @@ export interface AIConfig {
   readonly photoAnalysisModel: string
   readonly descriptionGenModel: string
   readonly embeddingModel: string
+  readonly imageGenerationModel: string
 }
 
 export const aiConfig = Config.all({
@@ -21,5 +22,8 @@ export const aiConfig = Config.all({
   ),
   embeddingModel: Config.string("MODEL_EMBEDDING").pipe(
     Config.withDefault("google/gemini-embedding-001")
+  ),
+  imageGenerationModel: Config.string("MODEL_IMAGE_GEN").pipe(
+    Config.withDefault("google/gemini-3-pro-image-preview")
   ),
 })

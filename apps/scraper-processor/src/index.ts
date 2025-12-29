@@ -160,7 +160,7 @@ export default {
                   rawDescription: dog.rawDescription,
                   name: dog.name,
                   sex: (textResult?.sex ?? dog.sex) as "male" | "female" | "unknown" | null | undefined,
-                  description: bioResult?.bio ?? dog.description,
+                  generatedBio: bioResult?.bio ?? dog.generatedBio,
                   locationName: textResult?.locationHints?.cityMention ?? dog.locationName,
                   locationCity: textResult?.locationHints?.cityMention ?? dog.locationCity,
                   locationLat: dog.locationLat,
@@ -218,7 +218,7 @@ export default {
             reindexJobs.push({
               type: "upsert",
               dogId: id,
-              description: bioResult?.bio ?? dog.description ?? undefined,
+              description: bioResult?.bio ?? dog.generatedBio ?? undefined,
             })
             added++
           } else {

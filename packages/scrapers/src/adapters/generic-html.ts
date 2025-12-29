@@ -47,7 +47,6 @@ export const genericHtmlAdapter = createAdapter({
       rawDescription: raw.rawDescription,
       name: raw.name,
       sex: raw.sex ?? "unknown",
-      description: raw.description ?? null,
       personalityTags: raw.personalityTags ?? [],
       photos: raw.photos ?? [],
       urgent: raw.urgent ?? false,

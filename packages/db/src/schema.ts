@@ -40,7 +40,6 @@ export const dogs = sqliteTable("dogs", {
   // Basic (from text extraction)
   name: text("name").notNull(),
   sex: text("sex", { enum: ["male", "female", "unknown"] }),
-  description: text("description"),
 
   // Location (where dog physically is)
   locationName: text("location_name"),

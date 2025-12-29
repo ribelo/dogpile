@@ -18,7 +18,6 @@ export interface RawDogData {
   readonly ageMonths?: number | null
   readonly size?: "small" | "medium" | "large" | null
   readonly sex?: "male" | "female" | "unknown"
-  readonly description?: string | null
   readonly personalityTags?: string[]
   readonly photos?: string[]
   readonly urgent?: boolean

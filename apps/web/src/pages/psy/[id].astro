@@ -48,7 +48,7 @@ const dog = await response.json()
 
           <div class="prose max-w-none">
             <h2 class="text-xl font-semibold mb-2">O mnie</h2>
-            <p set:html={dog.generatedBio || dog.description || dog.rawDescription} />
+            <p set:html={dog.generatedBio || dog.rawDescription} />
           </div>
 
           {dog.personalityTags?.length > 0 && (

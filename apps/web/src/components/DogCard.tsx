@@ -94,9 +94,9 @@ export default function DogCard(props: Props) {
           </button>
         </div>
 
-        {props.dog.description && (
+        {props.dog.generatedBio && (
           <p class="text-sys-ink-primary/70 mb-4 line-clamp-2 italic">
-            "{props.dog.description}"
+            "{props.dog.generatedBio}"
           </p>
         )}
 

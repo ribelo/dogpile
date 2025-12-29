@@ -25,7 +25,6 @@ export const Dog = Schema.Struct({
   // Basic (from text extraction)
   name: Schema.String,
   sex: Schema.NullOr(DogSex),
-  description: Schema.NullOr(Schema.String),
 
   // Location (where dog physically is)
   locationName: Schema.NullOr(Schema.String),

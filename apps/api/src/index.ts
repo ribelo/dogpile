@@ -112,7 +112,7 @@ const routes: Route[] = [
         db
           .select()
           .from(dogs)
-          .where(like(dogs.description, `%${query}%`))
+          .where(like(dogs.generatedBio, `%${query}%`))
           .limit(10)
           .all()
       )

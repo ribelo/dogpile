@@ -27,7 +27,7 @@ export interface Dog {
   shelterId: string
   name: string
   sex: "male" | "female" | "unknown" | null
-  description: string | null
+  generatedBio: string | null
   
   // Location
   locationName: string | null
