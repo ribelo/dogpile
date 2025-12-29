@@ -110,10 +110,13 @@ const runCommand = (scraperId: string) =>
 
 const processCommand = (scraperId: string) =>
   Effect.gen(function* () {
-    const limitArg = args.includes("--limit") ? parseInt(args[args.indexOf("--limit") + 1] ?? "999") : 999
-    const concurrency = args.includes("--concurrency")
-      ? Math.min(60, Math.max(1, parseInt(args[args.indexOf("--concurrency") + 1] ?? "10")))
+    const limitRaw = args.includes("--limit") ? parseInt(args[args.indexOf("--limit") + 1] ?? "999") : 999
+    const limitArg = Number.isNaN(limitRaw) ? 999 : limitRaw
+
+    const concurrencyRaw = args.includes("--concurrency")
+      ? parseInt(args[args.indexOf("--concurrency") + 1] ?? "10")
       : 10
+    const concurrency = Number.isNaN(concurrencyRaw) ? 10 : Math.min(60, Math.max(1, concurrencyRaw))
 
     const adapter = getAdapter(scraperId)
     if (!adapter) {

@@ -28,10 +28,10 @@ export const TextExtractorLive = Layer.effect(
       extract: (rawDescription: string, shelterContext?: { name: string; city: string }) =>
         Effect.gen(function* () {
           const prompt = promptTemplate
-            .replace("{{RAW_DESCRIPTION}}", rawDescription)
-            .replace("{{BREED_LIST}}", BREEDS.join(", "))
-            .replace("{{SHELTER_NAME}}", shelterContext?.name ?? "nieznane")
-            .replace("{{SHELTER_CITY}}", shelterContext?.city ?? "nieznane")
+            .replaceAll("{{RAW_DESCRIPTION}}", () => rawDescription)
+            .replaceAll("{{BREED_LIST}}", () => BREEDS.join(", "))
+            .replaceAll("{{SHELTER_NAME}}", () => shelterContext?.name ?? "nieznane")
+            .replaceAll("{{SHELTER_CITY}}", () => shelterContext?.city ?? "nieznane")
 
           const messages: ChatMessage[] = [
             { role: "system", content: "Extract structured data from the adoption listing. Return valid JSON only." },
