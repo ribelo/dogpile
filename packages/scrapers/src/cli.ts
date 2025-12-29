@@ -4,6 +4,9 @@ import { FetchHttpClient } from "@effect/platform"
 import { getAdapter, listAdapters } from "./registry.js"
 import type { RawDogData } from "./adapter.js"
 import { $ } from "bun"
+import { writeFileSync, unlinkSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 // Import core services
 import {
@@ -111,6 +114,26 @@ const execSql = (sql: string) =>
   Effect.tryPromise({
     try: () => $`bunx wrangler d1 execute dogpile-db-preview --remote --command ${sql}`.quiet().nothrow(),
     catch: (e) => new Error(`SQL failed: ${e}`)
+  })
+
+const uploadToR2 = (base64Data: string, key: string) =>
+  Effect.tryPromise({
+    try: async () => {
+      // Decode base64 to temp file
+      const data = base64Data.replace(/^data:image\/\w+;base64,/, "")
+      const buffer = Buffer.from(data, "base64")
+      const tmpPath = join(tmpdir(), `dogpile-${Date.now()}.png`)
+      writeFileSync(tmpPath, buffer)
+
+      // Upload via wrangler r2
+      await $`bunx wrangler r2 object put dogpile-generated/${key} --remote --file ${tmpPath}`.quiet()
+
+      // Cleanup temp file
+      unlinkSync(tmpPath)
+
+      return key
+    },
+    catch: (e) => new Error(`R2 upload failed: ${e}`)
   })
 
 const runCommand = (scraperId: string) =>
@@ -282,9 +305,18 @@ const processCommand = (scraperId: string) =>
             })
           )
           if (imgResult) {
-            yield* Console.log(`      ✓ Generated (${imgResult.base64Url.length} chars)`)
-            // TODO: Upload to R2 and get URL
-            // For now, just log success
+            const r2Key = `${dog.fingerprint}-nose.png`
+            yield* Console.log(`   ☁️ Uploading to R2...`)
+            const uploadedKey = yield* uploadToR2(imgResult.base64Url, r2Key).pipe(
+              Effect.catchAll((e) => {
+                console.log(`   ⚠️ R2 upload failed: ${e.message}`)
+                return Effect.succeed(null)
+              })
+            )
+            if (uploadedKey) {
+              generatedPhotoUrl = uploadedKey
+              yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
+            }
           }
         }
 
@@ -305,7 +337,7 @@ const processCommand = (scraperId: string) =>
             location_city, is_foster, vaccinated, sterilized, chipped,
             good_with_kids, good_with_dogs, good_with_cats,
             fur_length, fur_type, color_primary, color_secondary, color_pattern,
-            ear_type, tail_type, generated_bio
+            ear_type, tail_type, generated_bio, photos_generated
           ) VALUES (
             '${id}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}',
             '${esc(textResult?.sex ?? dog.sex ?? "unknown")}',
@@ -330,7 +362,8 @@ const processCommand = (scraperId: string) =>
             ${photoResult?.colorPattern ? `'${esc(photoResult.colorPattern)}'` : 'NULL'},
             ${photoResult?.earType ? `'${esc(photoResult.earType)}'` : 'NULL'},
             ${photoResult?.tailType ? `'${esc(photoResult.tailType)}'` : 'NULL'},
-            '${esc(bio?.bio ?? "")}'
+            '${esc(bio?.bio ?? "")}',
+            '${esc(JSON.stringify(generatedPhotoUrl ? [generatedPhotoUrl] : []))}'
           ) ON CONFLICT(fingerprint) DO UPDATE SET
             updated_at = ${now}, last_seen_at = ${now},
             raw_description = excluded.raw_description,
@@ -338,7 +371,8 @@ const processCommand = (scraperId: string) =>
             urgent = excluded.urgent,
             breed_estimates = CASE WHEN excluded.breed_estimates != '[]' THEN excluded.breed_estimates ELSE dogs.breed_estimates END,
             personality_tags = CASE WHEN excluded.personality_tags != '[]' THEN excluded.personality_tags ELSE dogs.personality_tags END,
-            generated_bio = CASE WHEN excluded.generated_bio != '' THEN excluded.generated_bio ELSE dogs.generated_bio END
+            generated_bio = CASE WHEN excluded.generated_bio != '' THEN excluded.generated_bio ELSE dogs.generated_bio END,
+            photos_generated = CASE WHEN excluded.photos_generated != '[]' THEN excluded.photos_generated ELSE dogs.photos_generated END
         `
         yield* execSql(sql).pipe(
           Effect.catchAll((e) => {
