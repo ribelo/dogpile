@@ -8,6 +8,7 @@ export const genericHtmlAdapter = createAdapter({
   id: "generic-html",
   name: "Generic HTML Scraper",
   url: "",
+  sourceUrl: "",
   city: "",
 
   fetch: (config: ScraperConfig) =>

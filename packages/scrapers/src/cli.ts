@@ -100,7 +100,7 @@ const runCommand = (scraperId: string) =>
 
       const now = Math.floor(Date.now() / 1000)
       for (const dog of rawDogs) {
-        const sql = `INSERT INTO dogs (id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint, status, urgent, created_at, updated_at, source_url, breed_estimates, personality_tags) VALUES ('${crypto.randomUUID()}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}', '${esc(dog.sex ?? "unknown")}', '${esc(dog.rawDescription)}', '${esc(JSON.stringify(dog.photos ?? []))}', '${esc(dog.fingerprint)}', 'available', ${dog.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.url + "/pets")}', '[]', '[]') ON CONFLICT(fingerprint) DO UPDATE SET updated_at = ${now}`
+        const sql = `INSERT INTO dogs (id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint, status, urgent, created_at, updated_at, source_url, breed_estimates, personality_tags) VALUES ('${crypto.randomUUID()}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}', '${esc(dog.sex ?? "unknown")}', '${esc(dog.rawDescription)}', '${esc(JSON.stringify(dog.photos ?? []))}', '${esc(dog.fingerprint)}', 'available', ${dog.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.sourceUrl)}', '[]', '[]') ON CONFLICT(fingerprint) DO UPDATE SET updated_at = ${now}`
         yield* execSql(sql)
       }
       yield* Console.log(`   ✓ Saved ${rawDogs.length} dogs`)
@@ -228,7 +228,7 @@ const processCommand = (scraperId: string) =>
             '${esc(dog.rawDescription)}',
             '${esc(JSON.stringify(dog.photos ?? []))}',
             '${esc(dog.fingerprint)}', 'available',
-            ${textResult?.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.url + "/pets")}',
+            ${textResult?.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.sourceUrl)}',
             '${esc(breedEstimates)}', '${esc(personalityTags)}',
             '${esc(sizeEstimate)}', '${esc(ageEstimate)}', '${esc(weightEstimate)}',
             ${textResult?.locationHints?.cityMention ? `'${esc(textResult.locationHints.cityMention)}'` : `'${esc(adapter.city)}'`},

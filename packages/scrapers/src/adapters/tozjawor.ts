@@ -36,6 +36,7 @@ export const tozjaworAdapter = createAdapter({
   id: "tozjawor",
   name: "TOZ Jawor",
   url: "https://tozjawor.pl",
+  sourceUrl: "https://tozjawor.pl/pets",
   city: "Jawor",
 
   fetch: (config) =>
