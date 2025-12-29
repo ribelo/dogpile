@@ -10,7 +10,10 @@ import promptTemplate from "../../prompts/text-extraction.md" with { type: "text
 import type { ChatMessage } from "./openrouter/types.js"
 
 export interface TextExtractor {
-  readonly extract: (rawDescription: string) => Effect.Effect<TextExtraction, ExtractionError>
+  readonly extract: (
+    rawDescription: string,
+    shelterContext?: { name: string; city: string }
+  ) => Effect.Effect<TextExtraction, ExtractionError>
 }
 
 export const TextExtractor = Context.GenericTag<TextExtractor>("@dogpile/TextExtractor")
@@ -22,11 +25,13 @@ export const TextExtractorLive = Layer.effect(
     const config = yield* aiConfig
 
     return {
-      extract: (rawDescription: string) =>
+      extract: (rawDescription: string, shelterContext?: { name: string; city: string }) =>
         Effect.gen(function* () {
           const prompt = promptTemplate
             .replace("{{RAW_DESCRIPTION}}", rawDescription)
             .replace("{{BREED_LIST}}", BREEDS.join(", "))
+            .replace("{{SHELTER_NAME}}", shelterContext?.name ?? "nieznane")
+            .replace("{{SHELTER_CITY}}", shelterContext?.city ?? "nieznane")
 
           const messages: ChatMessage[] = [
             { role: "system", content: "Extract structured data from the adoption listing. Return valid JSON only." },

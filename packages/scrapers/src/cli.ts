@@ -35,6 +35,7 @@ Options:
   --limit <n>             Limit dogs to process
   --json                  Output raw JSON
   --save                  Save to DB (for run command)
+  --concurrency <n>       Parallel AI processing (1-60, default 10)
 
 Examples:
   bun run cli list
@@ -110,6 +111,9 @@ const runCommand = (scraperId: string) =>
 const processCommand = (scraperId: string) =>
   Effect.gen(function* () {
     const limitArg = args.includes("--limit") ? parseInt(args[args.indexOf("--limit") + 1] ?? "999") : 999
+    const concurrency = args.includes("--concurrency")
+      ? Math.min(60, Math.max(1, parseInt(args[args.indexOf("--concurrency") + 1] ?? "10")))
+      : 10
 
     const adapter = getAdapter(scraperId)
     if (!adapter) {
@@ -119,6 +123,7 @@ const processCommand = (scraperId: string) =>
 
     yield* Console.log(`\n🐕 Processing: ${adapter.name}`)
     yield* Console.log(`   Pipeline: scrape → AI text → AI photo → generate bio → save\n`)
+    yield* Console.log(`   Concurrency: ${concurrency}`)
 
     const config = { shelterId: scraperId, baseUrl: "" }
 
@@ -142,112 +147,129 @@ const processCommand = (scraperId: string) =>
     yield* Console.log("🤖 AI Processing...")
     const now = Math.floor(Date.now() / 1000)
 
-    for (let i = 0; i < dogsToProcess.length; i++) {
-      const dog = dogsToProcess[i]
-      yield* Console.log(`\n[${i + 1}/${dogsToProcess.length}] ${dog.name}`)
+    const processDog = (dog: RawDogData, i: number) =>
+      Effect.gen(function* () {
+        yield* Console.log(`\n[${i + 1}/${dogsToProcess.length}] ${dog.name}`)
 
-      // Text extraction
-      yield* Console.log(`   📝 Text extraction...`)
-      const textResult = yield* textExtractor.extract(dog.rawDescription ?? "").pipe(
-        Effect.catchAll((e) => {
-          console.log(`   ⚠️ Failed: ${e.message}`)
-          return Effect.succeed(null)
-        })
-      )
-      if (textResult) {
-        yield* Console.log(`      ✓ Breeds: ${textResult.breedEstimates.map(b => b.breed).join(", ") || "none"}`)
-      }
-
-      // Photo analysis
-      let photoResult = null
-      if (dog.photos && dog.photos.length > 0) {
-        yield* Console.log(`   📷 Photo analysis (${dog.photos.length})...`)
-        photoResult = yield* photoAnalyzer.analyzeMultiple(dog.photos).pipe(
+        // Text extraction with shelter context
+        yield* Console.log(`   📝 Text extraction...`)
+        const textResult = yield* textExtractor.extract(dog.rawDescription ?? "", {
+          name: adapter.name,
+          city: adapter.city,
+        }).pipe(
           Effect.catchAll((e) => {
             console.log(`   ⚠️ Failed: ${e.message}`)
             return Effect.succeed(null)
           })
         )
-        if (photoResult) {
-          yield* Console.log(`      ✓ Colors: ${photoResult.colorPrimary ?? "?"}, fur: ${photoResult.furLength ?? "?"}`)
+        if (textResult) {
+          yield* Console.log(`      ✓ Breeds: ${textResult.breedEstimates.map(b => b.breed).join(", ") || "none"}`)
         }
-      }
 
-      // Bio generation
-      yield* Console.log(`   ✍️ Generating bio...`)
-      const bioInput = {
-        name: dog.name,
-        sex: textResult?.sex ?? dog.sex ?? null,
-        breedEstimates: [...(textResult?.breedEstimates ?? []), ...(photoResult?.breedEstimates ?? [])].slice(0, 3),
-        ageMonths: textResult?.ageEstimate?.months ?? null,
-        size: textResult?.sizeEstimate?.value ?? photoResult?.sizeEstimate?.value ?? null,
-        personalityTags: textResult?.personalityTags ?? [],
-        goodWithKids: textResult?.goodWithKids ?? null,
-        goodWithDogs: textResult?.goodWithDogs ?? null,
-        goodWithCats: textResult?.goodWithCats ?? null,
-        healthInfo: {
-          vaccinated: textResult?.vaccinated ?? null,
-          sterilized: textResult?.sterilized ?? null,
-        },
-      }
-      const bio = yield* descGenerator.generate(bioInput).pipe(
-        Effect.catchAll((e) => {
-          console.log(`   ⚠️ Failed: ${e.message}`)
-          return Effect.succeed(null)
-        })
-      )
+        // Photo analysis
+        let photoResult = null
+        if (dog.photos && dog.photos.length > 0) {
+          yield* Console.log(`   📷 Photo analysis (${dog.photos.length})...`)
+          photoResult = yield* photoAnalyzer.analyzeMultiple(dog.photos).pipe(
+            Effect.catchAll((e) => {
+              console.log(`   ⚠️ Failed: ${e.message}`)
+              return Effect.succeed(null)
+            })
+          )
+          if (photoResult) {
+            yield* Console.log(`      ✓ Colors: ${photoResult.colorPrimary ?? "?"}, fur: ${photoResult.furLength ?? "?"}`)
+          }
+        }
 
-      // Save to DB
-      const id = crypto.randomUUID()
-      const breedEstimates = JSON.stringify([...(textResult?.breedEstimates ?? []), ...(photoResult?.breedEstimates ?? [])].slice(0, 5))
-      const personalityTags = JSON.stringify(textResult?.personalityTags ?? [])
-      const sizeEstimate = JSON.stringify(textResult?.sizeEstimate ?? photoResult?.sizeEstimate ?? null)
-      const ageEstimate = JSON.stringify(textResult?.ageEstimate ?? null)
-      const weightEstimate = JSON.stringify(textResult?.weightEstimate ?? null)
+        // Bio generation
+        yield* Console.log(`   ✍️ Generating bio...`)
+        const bioInput = {
+          name: dog.name,
+          sex: textResult?.sex ?? dog.sex ?? null,
+          breedEstimates: [...(textResult?.breedEstimates ?? []), ...(photoResult?.breedEstimates ?? [])].slice(0, 3),
+          ageMonths: textResult?.ageEstimate?.months ?? null,
+          size: textResult?.sizeEstimate?.value ?? photoResult?.sizeEstimate?.value ?? null,
+          personalityTags: textResult?.personalityTags ?? [],
+          goodWithKids: textResult?.goodWithKids ?? null,
+          goodWithDogs: textResult?.goodWithDogs ?? null,
+          goodWithCats: textResult?.goodWithCats ?? null,
+          healthInfo: {
+            vaccinated: textResult?.vaccinated ?? null,
+            sterilized: textResult?.sterilized ?? null,
+          },
+        }
+        const bio = yield* descGenerator.generate(bioInput).pipe(
+          Effect.catchAll((e) => {
+            console.log(`   ⚠️ Failed: ${e.message}`)
+            return Effect.succeed(null)
+          })
+        )
 
-      const sql = `
-        INSERT INTO dogs (
-          id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint,
-          status, urgent, created_at, updated_at, source_url,
-          breed_estimates, personality_tags, size_estimate, age_estimate, weight_estimate,
-          location_city, is_foster, vaccinated, sterilized, chipped,
-          good_with_kids, good_with_dogs, good_with_cats,
-          fur_length, fur_type, color_primary, color_secondary, color_pattern,
-          ear_type, tail_type, generated_bio
-        ) VALUES (
-          '${id}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}',
-          '${esc(textResult?.sex ?? dog.sex ?? "unknown")}',
-          '${esc(dog.rawDescription)}',
-          '${esc(JSON.stringify(dog.photos ?? []))}',
-          '${esc(dog.fingerprint)}', 'available',
-          ${textResult?.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.url + "/pets")}',
-          '${esc(breedEstimates)}', '${esc(personalityTags)}',
-          '${esc(sizeEstimate)}', '${esc(ageEstimate)}', '${esc(weightEstimate)}',
-          ${textResult?.locationHints?.cityMention ? `'${esc(textResult.locationHints.cityMention)}'` : 'NULL'},
-          ${textResult?.locationHints?.isFoster !== null && textResult?.locationHints?.isFoster !== undefined ? (textResult.locationHints.isFoster ? 1 : 0) : 'NULL'},
-          ${textResult?.vaccinated !== null && textResult?.vaccinated !== undefined ? (textResult.vaccinated ? 1 : 0) : 'NULL'},
-          ${textResult?.sterilized !== null && textResult?.sterilized !== undefined ? (textResult.sterilized ? 1 : 0) : 'NULL'},
-          ${textResult?.chipped !== null && textResult?.chipped !== undefined ? (textResult.chipped ? 1 : 0) : 'NULL'},
-          ${textResult?.goodWithKids !== null && textResult?.goodWithKids !== undefined ? (textResult.goodWithKids ? 1 : 0) : 'NULL'},
-          ${textResult?.goodWithDogs !== null && textResult?.goodWithDogs !== undefined ? (textResult.goodWithDogs ? 1 : 0) : 'NULL'},
-          ${textResult?.goodWithCats !== null && textResult?.goodWithCats !== undefined ? (textResult.goodWithCats ? 1 : 0) : 'NULL'},
-          ${photoResult?.furLength ? `'${esc(photoResult.furLength)}'` : 'NULL'},
-          ${photoResult?.furType ? `'${esc(photoResult.furType)}'` : 'NULL'},
-          ${photoResult?.colorPrimary ? `'${esc(photoResult.colorPrimary)}'` : 'NULL'},
-          ${photoResult?.colorSecondary ? `'${esc(photoResult.colorSecondary)}'` : 'NULL'},
-          ${photoResult?.colorPattern ? `'${esc(photoResult.colorPattern)}'` : 'NULL'},
-          ${photoResult?.earType ? `'${esc(photoResult.earType)}'` : 'NULL'},
-          ${photoResult?.tailType ? `'${esc(photoResult.tailType)}'` : 'NULL'},
-          '${esc(bio?.bio ?? "")}'
-        ) ON CONFLICT(fingerprint) DO UPDATE SET
-          updated_at = ${now}, last_seen_at = ${now},
-          breed_estimates = CASE WHEN excluded.breed_estimates != '[]' THEN excluded.breed_estimates ELSE dogs.breed_estimates END,
-          personality_tags = CASE WHEN excluded.personality_tags != '[]' THEN excluded.personality_tags ELSE dogs.personality_tags END,
-          generated_bio = CASE WHEN excluded.generated_bio != '' THEN excluded.generated_bio ELSE dogs.generated_bio END
-      `
-      yield* execSql(sql)
-      yield* Console.log(`   💾 Saved`)
-    }
+        // Save to DB
+        const id = crypto.randomUUID()
+        const breedEstimates = JSON.stringify([...(textResult?.breedEstimates ?? []), ...(photoResult?.breedEstimates ?? [])].slice(0, 5))
+        const personalityTags = JSON.stringify(textResult?.personalityTags ?? [])
+        const sizeEstimate = JSON.stringify(textResult?.sizeEstimate ?? photoResult?.sizeEstimate ?? null)
+        const ageEstimate = JSON.stringify(textResult?.ageEstimate ?? null)
+        const weightEstimate = JSON.stringify(textResult?.weightEstimate ?? null)
+
+        const sql = `
+          INSERT INTO dogs (
+            id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint,
+            status, urgent, created_at, updated_at, source_url,
+            breed_estimates, personality_tags, size_estimate, age_estimate, weight_estimate,
+            location_city, is_foster, vaccinated, sterilized, chipped,
+            good_with_kids, good_with_dogs, good_with_cats,
+            fur_length, fur_type, color_primary, color_secondary, color_pattern,
+            ear_type, tail_type, generated_bio
+          ) VALUES (
+            '${id}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}',
+            '${esc(textResult?.sex ?? dog.sex ?? "unknown")}',
+            '${esc(dog.rawDescription)}',
+            '${esc(JSON.stringify(dog.photos ?? []))}',
+            '${esc(dog.fingerprint)}', 'available',
+            ${textResult?.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.url + "/pets")}',
+            '${esc(breedEstimates)}', '${esc(personalityTags)}',
+            '${esc(sizeEstimate)}', '${esc(ageEstimate)}', '${esc(weightEstimate)}',
+            ${textResult?.locationHints?.cityMention ? `'${esc(textResult.locationHints.cityMention)}'` : `'${esc(adapter.city)}'`},
+            ${textResult?.locationHints?.isFoster ? 1 : 0},
+            ${textResult?.vaccinated !== null && textResult?.vaccinated !== undefined ? (textResult.vaccinated ? 1 : 0) : 'NULL'},
+            ${textResult?.sterilized !== null && textResult?.sterilized !== undefined ? (textResult.sterilized ? 1 : 0) : 'NULL'},
+            ${textResult?.chipped !== null && textResult?.chipped !== undefined ? (textResult.chipped ? 1 : 0) : 'NULL'},
+            ${textResult?.goodWithKids !== null && textResult?.goodWithKids !== undefined ? (textResult.goodWithKids ? 1 : 0) : 'NULL'},
+            ${textResult?.goodWithDogs !== null && textResult?.goodWithDogs !== undefined ? (textResult.goodWithDogs ? 1 : 0) : 'NULL'},
+            ${textResult?.goodWithCats !== null && textResult?.goodWithCats !== undefined ? (textResult.goodWithCats ? 1 : 0) : 'NULL'},
+            ${photoResult?.furLength ? `'${esc(photoResult.furLength)}'` : 'NULL'},
+            ${photoResult?.furType ? `'${esc(photoResult.furType)}'` : 'NULL'},
+            ${photoResult?.colorPrimary ? `'${esc(photoResult.colorPrimary)}'` : 'NULL'},
+            ${photoResult?.colorSecondary ? `'${esc(photoResult.colorSecondary)}'` : 'NULL'},
+            ${photoResult?.colorPattern ? `'${esc(photoResult.colorPattern)}'` : 'NULL'},
+            ${photoResult?.earType ? `'${esc(photoResult.earType)}'` : 'NULL'},
+            ${photoResult?.tailType ? `'${esc(photoResult.tailType)}'` : 'NULL'},
+            '${esc(bio?.bio ?? "")}'
+          ) ON CONFLICT(fingerprint) DO UPDATE SET
+            updated_at = ${now}, last_seen_at = ${now},
+            raw_description = excluded.raw_description,
+            photos = excluded.photos,
+            urgent = excluded.urgent,
+            breed_estimates = CASE WHEN excluded.breed_estimates != '[]' THEN excluded.breed_estimates ELSE dogs.breed_estimates END,
+            personality_tags = CASE WHEN excluded.personality_tags != '[]' THEN excluded.personality_tags ELSE dogs.personality_tags END,
+            generated_bio = CASE WHEN excluded.generated_bio != '' THEN excluded.generated_bio ELSE dogs.generated_bio END
+        `
+        yield* execSql(sql).pipe(
+          Effect.catchAll((e) => {
+            console.log(`   ⚠️ DB save failed: ${e}`)
+            return Effect.succeed(null)
+          })
+        )
+        yield* Console.log(`   💾 Saved`)
+      })
+
+    yield* Effect.forEach(
+      dogsToProcess,
+      (dog, i) => processDog(dog, i),
+      { concurrency }
+    )
 
     yield* Console.log(`\n\n✅ Complete! Processed ${dogsToProcess.length} dogs.`)
   })
