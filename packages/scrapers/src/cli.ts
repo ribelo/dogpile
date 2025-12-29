@@ -81,6 +81,7 @@ Commands:
   list                    List all available scrapers
   run <scraper-id>        Run scraper (dry-run by default)
   process <scraper-id>    Full pipeline: scrape + AI + save
+  regenerate-photos         Generate AI photos for dogs in DB without them
 
 Options:
   --limit <n>             Limit dogs to process
@@ -392,6 +393,95 @@ const processCommand = (scraperId: string) =>
     yield* Console.log(`\n\n✅ Complete! Processed ${dogsToProcess.length} dogs.`)
   })
 
+
+// Regenerate photos for dogs in DB that don't have generated photos
+const regeneratePhotosCommand = () =>
+  Effect.gen(function* () {
+    const concurrency = Math.min(60, Math.max(1, getIntFlag(parsed.flags, "concurrency", 5)))
+    const limit = getIntFlag(parsed.flags, "limit", 999)
+    
+    yield* Console.log(`\n🎨 Regenerating photos for dogs without AI-generated photos`)
+    yield* Console.log(`   Concurrency: ${concurrency}\n`)
+
+    // Fetch dogs from DB that need photos
+    yield* Console.log("📡 Fetching dogs from DB...")
+    const result = yield* Effect.tryPromise({
+      try: async () => {
+        const proc = await $`bunx wrangler d1 execute dogpile-db-preview --remote --json --command "SELECT id, name, fingerprint, photos, generated_bio, photos_generated FROM dogs WHERE photos_generated = '[]' OR photos_generated IS NULL LIMIT ${limit}"`.quiet()
+        return JSON.parse(proc.stdout.toString())
+      },
+      catch: (e) => new Error(`DB query failed: ${e}`)
+    })
+
+    const dogs = result[0]?.results ?? []
+    yield* Console.log(`   Found ${dogs.length} dogs needing photos\n`)
+
+    if (dogs.length === 0) {
+      yield* Console.log("✅ All dogs already have generated photos!")
+      return
+    }
+
+    const imageGen = yield* ImageGenerator
+
+    const processDbDog = (dog: { id: string; name: string; fingerprint: string; photos: string; generated_bio: string | null }, i: number) =>
+      Effect.gen(function* () {
+        const photos = JSON.parse(dog.photos || "[]") as string[]
+        const bio = dog.generated_bio || dog.name
+
+        yield* Console.log(`[${i + 1}/${dogs.length}] ${dog.name}`)
+
+        if (photos.length === 0) {
+          yield* Console.log(`   ⚠️ No reference photos, skipping`)
+          return
+        }
+
+        yield* Console.log(`   🎨 Generating nose photo...`)
+        const imgResult = yield* imageGen.generateNosePhoto({
+          dogDescription: bio,
+          referencePhotoUrl: photos[0],
+        }).pipe(
+          Effect.catchAll((e) => {
+            console.log(`   ⚠️ Image gen failed: ${e.message}`)
+            return Effect.succeed(null)
+          })
+        )
+
+        if (imgResult) {
+          const r2Key = `${dog.fingerprint}-nose.png`
+          yield* Console.log(`   ☁️ Uploading to R2...`)
+          const uploadedKey = yield* uploadToR2(imgResult.base64Url, r2Key).pipe(
+            Effect.catchAll((e) => {
+              console.log(`   ⚠️ R2 upload failed: ${e.message}`)
+              return Effect.succeed(null)
+            })
+          )
+
+          if (uploadedKey) {
+            yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
+            // Update DB
+            const photosGenerated = JSON.stringify([uploadedKey])
+            const sql = `UPDATE dogs SET photos_generated = '${photosGenerated.replace(/'/g, "''")}' WHERE id = '${dog.id}'`
+            yield* execSql(sql).pipe(
+              Effect.catchAll((e) => {
+                console.log(`   ⚠️ DB update failed: ${e}`)
+                return Effect.succeed(null)
+              })
+            )
+            yield* Console.log(`   💾 Saved`)
+          }
+        }
+      })
+
+    yield* Console.log("🤖 Generating photos...\n")
+    yield* Effect.forEach(
+      dogs,
+      (dog, i) => processDbDog(dog as { id: string; name: string; fingerprint: string; photos: string; generated_bio: string | null }, i),
+      { concurrency }
+    )
+
+    yield* Console.log(`\n✅ Complete!`)
+  })
+
 // Build layers
 const AILayer = Layer.mergeAll(
   TextExtractorLive,
@@ -420,6 +510,10 @@ const program = Effect.gen(function* () {
     const scraperId = parsed.commandArg
     if (!scraperId) { yield* Console.error("Missing scraper ID"); return }
     yield* processCommand(scraperId)
+    return
+  }
+  if (command === "regenerate-photos") {
+    yield* regeneratePhotosCommand()
     return
   }
   yield* Console.error(`Unknown command: ${command}`)
