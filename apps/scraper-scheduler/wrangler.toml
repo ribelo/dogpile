@@ -10,6 +10,7 @@ crons = ["0 * * * *"]
 binding = "DB"
 database_name = "dogpile-db"
 database_id = "ea4a4ec7-ad28-4219-a86f-5054bc79b21c"
+preview_database_id = "ebaccb4b-50f9-4aa9-b155-577e319dbd15"
 
 [[queues.producers]]
 binding = "SCRAPE_QUEUE"

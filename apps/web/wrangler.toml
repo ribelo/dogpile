@@ -10,6 +10,7 @@ assets = { directory = "dist", binding = "ASSETS" }
 [[kv_namespaces]]
 binding = "SESSION"
 id = "53504d090fba4bdf8e2313da14b37720"
+preview_id = "bedd941d19a44eec960c8c66fdae55b9"
 
 [vars]
 API_URL = "https://dogpile-api.extropy.club"
