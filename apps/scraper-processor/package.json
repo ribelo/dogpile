@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bunx wrangler dev --local --port 8789 --inspector-port 9232",
+    "dev": "NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt bunx wrangler dev --remote --port 8789 --inspector-port 9232",
     "build": "bun build src/index.ts --outdir dist --target browser --minify",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit"
