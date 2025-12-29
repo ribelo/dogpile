@@ -16,3 +16,7 @@ export const getAdapter = (id: string): ShelterAdapter | undefined => {
 export const getAllAdapters = (): readonly ShelterAdapter[] => {
   return Array.from(adapters.values())
 }
+
+export const listAdapters = (): readonly { id: string; name: string }[] => {
+  return Array.from(adapters.values()).map((a) => ({ id: a.id, name: a.name }))
+}
