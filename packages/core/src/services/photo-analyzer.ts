@@ -61,8 +61,11 @@ export const PhotoAnalyzerLive = Layer.effect(
           return yield* Effect.fail(new ExtractionError("photo", null, "No text in response"))
         }
 
+  const stripMarkdown = (s: string): string =>
+    s.replace(/^\s*```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim()
+
         const json = yield* Effect.try({
-          try: () => JSON.parse(textContent),
+          try: () => JSON.parse(stripMarkdown(textContent)),
           catch: (e) => new ExtractionError("photo", e, "Failed to parse JSON response"),
         })
 

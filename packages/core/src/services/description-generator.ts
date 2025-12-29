@@ -73,8 +73,11 @@ export const DescriptionGeneratorLive = Layer.effect(
             )
           }
 
+  const stripMarkdown = (s: string): string =>
+    s.replace(/^\s*```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim()
+
           const json = yield* Effect.try({
-            try: () => JSON.parse(textContent),
+            try: () => JSON.parse(stripMarkdown(textContent)),
             catch: (e) =>
               new GenerationError({ cause: e, message: "Failed to parse JSON response" }),
           })

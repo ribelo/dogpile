@@ -93,12 +93,13 @@ const runCommand = (scraperId: string) =>
 
     if (saveToDb) {
       yield* Console.log(`💾 Saving...`)
-      const shelterSql = `INSERT INTO shelters (id, slug, name, url, city, status) VALUES ('${scraperId}', '${scraperId}', '${adapter.name}', 'https://tozjawor.pl', 'Jawor', 'active') ON CONFLICT(id) DO UPDATE SET name = excluded.name`
+      const esc = (s: string | null | undefined) => (s ?? "").replace(/'/g, "''")
+      const shelterSql = `INSERT INTO shelters (id, slug, name, url, city, status) VALUES ('${esc(scraperId)}', '${esc(scraperId)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', 'active') ON CONFLICT(id) DO UPDATE SET name = excluded.name`
       yield* execSql(shelterSql)
-      
+
       const now = Math.floor(Date.now() / 1000)
       for (const dog of rawDogs) {
-        const sql = `INSERT INTO dogs (id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint, status, urgent, created_at, updated_at, source_url, breed_estimates, personality_tags) VALUES ('${crypto.randomUUID()}', '${scraperId}', '${dog.externalId}', '${dog.name.replace(/'/g, "''")}', '${dog.sex ?? "unknown"}', '${(dog.rawDescription ?? "").replace(/'/g, "''")}', '${JSON.stringify(dog.photos ?? []).replace(/'/g, "''")}', '${dog.fingerprint}', 'available', ${dog.urgent ? 1 : 0}, ${now}, ${now}, 'https://tozjawor.pl/pets', '[]', '[]') ON CONFLICT(fingerprint) DO UPDATE SET updated_at = ${now}`
+        const sql = `INSERT INTO dogs (id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint, status, urgent, created_at, updated_at, source_url, breed_estimates, personality_tags) VALUES ('${crypto.randomUUID()}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}', '${esc(dog.sex ?? "unknown")}', '${esc(dog.rawDescription)}', '${esc(JSON.stringify(dog.photos ?? []))}', '${esc(dog.fingerprint)}', 'available', ${dog.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.url + "/pets")}', '[]', '[]') ON CONFLICT(fingerprint) DO UPDATE SET updated_at = ${now}`
         yield* execSql(sql)
       }
       yield* Console.log(`   ✓ Saved ${rawDogs.length} dogs`)
@@ -128,8 +129,9 @@ const processCommand = (scraperId: string) =>
     const dogsToProcess = rawDogs.slice(0, limitArg)
     yield* Console.log(`   Found ${rawDogs.length}, processing ${dogsToProcess.length}\n`)
 
+    const esc = (s: string | null | undefined) => (s ?? "").replace(/'/g, "''")
     // Step 2: Ensure shelter
-    const shelterSql = `INSERT INTO shelters (id, slug, name, url, city, status) VALUES ('${scraperId}', '${scraperId}', '${adapter.name}', 'https://tozjawor.pl', 'Jawor', 'active') ON CONFLICT(id) DO UPDATE SET name = excluded.name`
+    const shelterSql = `INSERT INTO shelters (id, slug, name, url, city, status) VALUES ('${esc(scraperId)}', '${esc(scraperId)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', 'active') ON CONFLICT(id) DO UPDATE SET name = excluded.name`
     yield* execSql(shelterSql)
 
     // Get services
@@ -197,7 +199,6 @@ const processCommand = (scraperId: string) =>
 
       // Save to DB
       const id = crypto.randomUUID()
-      const esc = (s: string | null | undefined) => (s ?? "").replace(/'/g, "''")
       const breedEstimates = JSON.stringify([...(textResult?.breedEstimates ?? []), ...(photoResult?.breedEstimates ?? [])].slice(0, 5))
       const personalityTags = JSON.stringify(textResult?.personalityTags ?? [])
       const sizeEstimate = JSON.stringify(textResult?.sizeEstimate ?? photoResult?.sizeEstimate ?? null)
@@ -214,12 +215,12 @@ const processCommand = (scraperId: string) =>
           fur_length, fur_type, color_primary, color_secondary, color_pattern,
           ear_type, tail_type, generated_bio
         ) VALUES (
-          '${id}', '${scraperId}', '${dog.externalId}', '${esc(dog.name)}',
-          '${textResult?.sex ?? dog.sex ?? "unknown"}',
+          '${id}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}',
+          '${esc(textResult?.sex ?? dog.sex ?? "unknown")}',
           '${esc(dog.rawDescription)}',
           '${esc(JSON.stringify(dog.photos ?? []))}',
-          '${dog.fingerprint}', 'available',
-          ${textResult?.urgent ? 1 : 0}, ${now}, ${now}, 'https://tozjawor.pl/pets',
+          '${esc(dog.fingerprint)}', 'available',
+          ${textResult?.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.url + "/pets")}',
           '${esc(breedEstimates)}', '${esc(personalityTags)}',
           '${esc(sizeEstimate)}', '${esc(ageEstimate)}', '${esc(weightEstimate)}',
           ${textResult?.locationHints?.cityMention ? `'${esc(textResult.locationHints.cityMention)}'` : 'NULL'},
@@ -230,19 +231,19 @@ const processCommand = (scraperId: string) =>
           ${textResult?.goodWithKids !== null && textResult?.goodWithKids !== undefined ? (textResult.goodWithKids ? 1 : 0) : 'NULL'},
           ${textResult?.goodWithDogs !== null && textResult?.goodWithDogs !== undefined ? (textResult.goodWithDogs ? 1 : 0) : 'NULL'},
           ${textResult?.goodWithCats !== null && textResult?.goodWithCats !== undefined ? (textResult.goodWithCats ? 1 : 0) : 'NULL'},
-          ${photoResult?.furLength ? `'${photoResult.furLength}'` : 'NULL'},
-          ${photoResult?.furType ? `'${photoResult.furType}'` : 'NULL'},
+          ${photoResult?.furLength ? `'${esc(photoResult.furLength)}'` : 'NULL'},
+          ${photoResult?.furType ? `'${esc(photoResult.furType)}'` : 'NULL'},
           ${photoResult?.colorPrimary ? `'${esc(photoResult.colorPrimary)}'` : 'NULL'},
           ${photoResult?.colorSecondary ? `'${esc(photoResult.colorSecondary)}'` : 'NULL'},
-          ${photoResult?.colorPattern ? `'${photoResult.colorPattern}'` : 'NULL'},
-          ${photoResult?.earType ? `'${photoResult.earType}'` : 'NULL'},
-          ${photoResult?.tailType ? `'${photoResult.tailType}'` : 'NULL'},
+          ${photoResult?.colorPattern ? `'${esc(photoResult.colorPattern)}'` : 'NULL'},
+          ${photoResult?.earType ? `'${esc(photoResult.earType)}'` : 'NULL'},
+          ${photoResult?.tailType ? `'${esc(photoResult.tailType)}'` : 'NULL'},
           '${esc(bio?.bio ?? "")}'
         ) ON CONFLICT(fingerprint) DO UPDATE SET
           updated_at = ${now}, last_seen_at = ${now},
-          breed_estimates = excluded.breed_estimates,
-          personality_tags = excluded.personality_tags,
-          generated_bio = excluded.generated_bio
+          breed_estimates = CASE WHEN excluded.breed_estimates != '[]' THEN excluded.breed_estimates ELSE dogs.breed_estimates END,
+          personality_tags = CASE WHEN excluded.personality_tags != '[]' THEN excluded.personality_tags ELSE dogs.personality_tags END,
+          generated_bio = CASE WHEN excluded.generated_bio != '' THEN excluded.generated_bio ELSE dogs.generated_bio END
       `
       yield* execSql(sql)
       yield* Console.log(`   💾 Saved`)

@@ -35,6 +35,8 @@ const parseSex = (sex: string): "male" | "female" | "unknown" => {
 export const tozjaworAdapter = createAdapter({
   id: "tozjawor",
   name: "TOZ Jawor",
+  url: "https://tozjawor.pl",
+  city: "Jawor",
 
   fetch: (config) =>
     Effect.gen(function* () {

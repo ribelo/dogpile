@@ -7,6 +7,8 @@ import { ScrapeError, ParseError, type CreateDogInput } from "@dogpile/core"
 export const genericHtmlAdapter = createAdapter({
   id: "generic-html",
   name: "Generic HTML Scraper",
+  url: "",
+  city: "",
 
   fetch: (config: ScraperConfig) =>
     Effect.gen(function* () {
