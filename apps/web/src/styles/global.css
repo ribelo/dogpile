@@ -57,10 +57,66 @@
   .tag-urgent {
     @apply tag bg-sys-state-urgent text-white;
   }
+
+  .badge {
+    @apply inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase border-2 border-sys-ink-primary/10 bg-white/50;
+  }
+
+  .polaroid {
+    @apply bg-white p-3 pb-12 rotate-[-1deg] transition-transform hover:rotate-0;
+    box-shadow: 4px 4px 0 #eaddcf, 8px 8px 0 rgba(0,0,0,0.03);
+  }
+
+  .filter-input {
+    @apply bg-sys-paper-card border-2 border-sys-paper-shadow p-2 font-narrative text-sys-ink-primary focus:outline-none focus:border-sys-heart-core transition-colors;
+    border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  }
+
+  .link-arrow {
+    @apply inline-flex items-center gap-1 font-bold text-sys-heart-core hover:translate-x-1 transition-transform;
+  }
 }
 
 @layer utilities {
+  .card-appear {
+    animation: unfold 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+  }
+
+  .card-grid > *:nth-child(1) { animation-delay: 0ms; }
+  .card-grid > *:nth-child(2) { animation-delay: 50ms; }
+  .card-grid > *:nth-child(3) { animation-delay: 100ms; }
+  .card-grid > *:nth-child(4) { animation-delay: 150ms; }
+  .card-grid > *:nth-child(5) { animation-delay: 200ms; }
+  .card-grid > *:nth-child(6) { animation-delay: 250ms; }
+  .card-grid > *:nth-child(7) { animation-delay: 300ms; }
+  .card-grid > *:nth-child(8) { animation-delay: 350ms; }
+.card-grid > *:nth-child(9) { animation-delay: 400ms; }
+
+  .heart-pop {
+    animation: heart-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  @keyframes heart-pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.4); }
+    100% { transform: scale(1); }
+  }
+
   .nostalgia-img {
     filter: contrast(0.95) brightness(1.02);
   }
+
+  .grain-overlay::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    z-index: 9999;
+  }
+
+  .card-grid > *:nth-child(3n+1) { @apply rotate-[0.5deg]; }
+  .card-grid > *:nth-child(3n+2) { @apply -rotate-[0.5deg]; }
+  .card-grid > *:nth-child(5n) { @apply rotate-[1deg]; }
 }

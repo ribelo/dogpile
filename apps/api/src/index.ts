@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { drizzle } from "drizzle-orm/d1"
 import { dogs, shelters } from "@dogpile/db"
-import { eq, desc, and, like } from "drizzle-orm"
+import { eq, desc, and, like, sql } from "drizzle-orm"
 
 interface Env {
   DB: D1Database
@@ -11,6 +11,7 @@ interface Env {
   VECTORIZE: VectorizeIndex
   OPENROUTER_API_KEY: string
   ENVIRONMENT: string
+  R2_PUBLIC_DOMAIN?: string
 }
 
 type RouteHandler = (
@@ -118,6 +119,62 @@ const routes: Route[] = [
       )
 
       return yield* json({ dogs: results, scores: results.map(() => 1.0) })
+    }),
+  },
+  {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/photos/generated/:key" }),
+    handler: (_req, env, params) => Effect.gen(function* () {
+      const key = decodeURIComponent(params.key)
+      const object = yield* Effect.promise(() => env.PHOTOS_GENERATED.get(key))
+      
+      if (!object) {
+        return yield* json({ error: "Photo not found" }, 404)
+      }
+      
+      const headers = new Headers()
+      headers.set("Content-Type", object.httpMetadata?.contentType || "image/png")
+      headers.set("Cache-Control", "public, max-age=31536000")
+      headers.set("Access-Control-Allow-Origin", "*")
+      
+      return new Response(object.body, { headers })
+    }),
+  },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/admin/sync-generated-photos" }),
+    handler: (req, env) => Effect.gen(function* () {
+      const publicDomain = "dogpile-generated.extropy.club"
+      
+      const listed = yield* Effect.promise(() => env.PHOTOS_GENERATED.list())
+      
+      const updates: { fingerprint: string; url: string }[] = []
+      
+      for (const obj of listed.objects) {
+        const match = obj.key.match(/^(.+)-nose\.png$/)
+        if (match) {
+          const fingerprint = match[1]
+          const url = `https://${publicDomain}/${obj.key}`
+          updates.push({ fingerprint, url })
+        }
+      }
+      
+      let updated = 0
+      for (const { fingerprint, url } of updates) {
+        const result = yield* Effect.promise(() =>
+          env.DB.prepare(
+            `UPDATE dogs SET photos_generated = ? WHERE fingerprint = ?`
+          ).bind(JSON.stringify([url]), fingerprint).run()
+        )
+        if (result.meta.changes > 0) updated++
+      }
+      
+      return yield* json({ 
+        message: "Sync complete", 
+        found: updates.length, 
+        updated,
+        sample: updates.slice(0, 3)
+      })
     }),
   },
 ]

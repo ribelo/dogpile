@@ -1,0 +1,53 @@
+{
+  "hero": {
+    "headline": "Your new best friend is already waiting here.",
+    "subheadline": "Dogs from all over the country in one place. Find the one.",
+    "cta": "Meet the dogs",
+    "stats": "12 found homes"
+  },
+  "search": {
+    "placeholder": "Search for a dog...",
+    "button": "Search"
+  },
+  "filters": {
+    "title": "Follow your nose",
+    "subtitle": "Let's find who is waiting for you",
+    "location": "Location",
+    "size": "Size",
+    "age": "Age",
+    "energy": "Energy",
+    "anywhere": "Anywhere (Poland)",
+    "doesntMatter": "Doesn't matter",
+    "puppies": "Puppies",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "seniors": "Seniors",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High"
+  },
+  "card": {
+    "years": "years",
+    "months": "months",
+    "male": "Male",
+    "female": "Female",
+    "urgent": "Urgent!",
+    "location": "Location",
+    "readStory": "Read story",
+    "favorite": "Add to favorites"
+  },
+  "empty": {
+    "title": "It's empty here...",
+    "subtitle": "Maybe try changing the criteria?",
+    "showAll": "Show all dogs"
+  },
+  "footer": {
+    "tagline": "Because every dog deserves a home",
+    "copyright": "© 2024 Dogpile. All rights reserved."
+  },
+  "meta": {
+    "siteTitle": "Dogpile - Find your dog",
+    "siteDescription": "Dogs from Polish shelters in one place. Find your best friend."
+  }
+}

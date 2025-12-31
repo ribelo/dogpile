@@ -1,20 +1,68 @@
 ---
 ---
 
-<header class="relative bg-sys-paper-base py-20 overflow-hidden">
-  <div class="max-w-4xl mx-auto px-6 text-center relative z-10">
-    <h1 class="font-title text-6xl md:text-8xl font-black text-sys-ink-primary mb-6">
-      the pile is waiting.
+<header class="relative z-10 max-w-6xl mx-auto px-4 grid md:grid-cols-2 gap-12 items-center py-24">
+  <div class="animate-[unfold_1s_ease-out]">
+    <span class="inline-flex items-center gap-1 px-3 py-1 bg-sys-heart-soft/30 text-sys-ink-primary font-bold rounded-full text-sm mb-4 transform rotate-1 border border-sys-heart-soft/50">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+      </svg>
+      Poland Wide // Public Good
+    </span>
+    <h1 class="font-title text-6xl md:text-7xl font-black text-sys-ink-primary mb-6 leading-[0.9] lowercase">
+      The pile is <br /><span class="text-sys-heart-core italic">waiting.</span>
     </h1>
-    <p class="text-xl md:text-2xl text-sys-ink-primary/70 mb-10 font-narrative max-w-2xl mx-auto">
-      From the Baltic to the Tatras, thousands of good dogs are waiting for a human hand.
-      Find the one that fits your life.
+    <p class="text-xl text-sys-ink-primary/80 mb-8 max-w-md leading-relaxed">
+      From the Baltic to the Tatras, thousands of good dogs are waiting for a human hand. We collect them all in one cozy place, so you can find the one that fits your life.
     </p>
-    <a href="#dogs" class="btn-primary inline-block">
-      Meet the Dogs
-    </a>
+    <div class="flex flex-wrap gap-4 items-center">
+      <a href="#dogs" class="bg-sys-ink-primary text-sys-paper-base font-bold text-lg py-4 px-8 paper-edge hover:bg-sys-heart-core transition-colors flex items-center gap-2 no-underline">
+        Meet the Dogs
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-sys-heart-soft" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 14c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-5-4c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-3-3c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+        </svg>
+      </a>
+      <div class="flex items-center gap-2 px-4 py-2">
+        <div class="flex -space-x-3">
+          <img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop" class="w-10 h-10 rounded-full border-2 border-sys-paper-base object-cover" alt="dog 1" />
+          <img src="https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=100&h=100&fit=crop" class="w-10 h-10 rounded-full border-2 border-sys-paper-base object-cover" alt="dog 2" />
+          <img src="https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=100&h=100&fit=crop" class="w-10 h-10 rounded-full border-2 border-sys-paper-base object-cover" alt="dog 3" />
+        </div>
+        <span class="text-sm font-bold opacity-70">12 found homes today</span>
+      </div>
+    </div>
   </div>
-  
-  <div class="absolute -bottom-20 -left-20 w-64 h-64 bg-sys-heart-soft/30 rounded-full blur-3xl"></div>
-  <div class="absolute top-10 -right-20 w-80 h-80 bg-sys-nature-sky/20 rounded-full blur-3xl"></div>
+
+  <div class="relative hidden md:block">
+    <div class="relative z-10 paper-edge overflow-hidden border-8 border-sys-paper-card animate-breath rotate-2 shadow-xl">
+      <img 
+        src="https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=1000&auto=format&fit=crop" 
+        alt="Happy dog in field" 
+        class="nostalgia-img w-full aspect-[4/5] object-cover"
+      />
+      <div class="absolute bottom-0 w-full bg-sys-paper-card p-4 text-center">
+        <p class="font-title font-bold text-2xl text-sys-ink-primary">Burek</p>
+        <p class="text-sm text-sys-ink-primary/60 font-narrative">Waiting in Kraków</p>
+      </div>
+    </div>
+    <div class="absolute -top-10 -right-10 text-sys-nature-sky/20 w-48 h-48 -z-10 transform rotate-12">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M17 3a4 4 0 0 1 4 4 4 4 0 0 1-2 3.44l-.13.06a1.5 1.5 0 0 0-.87 1.25V12a1.5 1.5 0 0 0 .87 1.25l.13.06A4 4 0 0 1 21 17a4 4 0 0 1-4 4 4 4 0 0 1-3.44-2l-.06-.13A1.5 1.5 0 0 0 12.25 18h-.5a1.5 1.5 0 0 0-1.25.87l-.06.13A4 4 0 0 1 7 21a4 4 0 0 1-4-4 4 4 0 0 1 2-3.44l.13-.06A1.5 1.5 0 0 0 6 12.25v-.5a1.5 1.5 0 0 0-.87-1.25l-.13-.06A4 4 0 0 1 3 7a4 4 0 0 1 4-4 4 4 0 0 1 3.44 2l.06.13A1.5 1.5 0 0 0 11.75 6h.5a1.5 1.5 0 0 0 1.25-.87l.06-.13A4 4 0 0 1 17 3Z"/>
+      </svg>
+    </div>
+  </div>
 </header>
+
+<style>
+  @keyframes unfold {
+    from { transform: scaleY(0); opacity: 0; }
+    to { transform: scaleY(1); opacity: 1; }
+  }
+  @keyframes breath {
+    0%, 100% { transform: rotate(2deg) scale(1); }
+    50% { transform: rotate(1.5deg) scale(1.02); }
+  }
+  .animate-breath {
+    animation: breath 8s ease-in-out infinite;
+  }
+</style>

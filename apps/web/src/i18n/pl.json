@@ -1,0 +1,53 @@
+{
+  "hero": {
+    "headline": "Twój nowy najlepszy przyjaciel już tu czeka.",
+    "subheadline": "Psy z całego kraju w jednym miejscu. Znajdź tego jedynego.",
+    "cta": "Poznaj psy",
+    "stats": "12 znalazło dom"
+  },
+  "search": {
+    "placeholder": "Szukaj psa...",
+    "button": "Szukaj"
+  },
+  "filters": {
+    "title": "Podążaj za nosem",
+    "subtitle": "Znajdźmy tego, który na ciebie czeka",
+    "location": "Lokalizacja",
+    "size": "Rozmiar",
+    "age": "Wiek",
+    "energy": "Energia",
+    "anywhere": "Gdziekolwiek (Polska)",
+    "doesntMatter": "Nie ma znaczenia",
+    "puppies": "Szczeniaki",
+    "small": "Małe",
+    "medium": "Średnie",
+    "large": "Duże",
+    "seniors": "Seniorzy",
+    "low": "Niski",
+    "medium": "Średni",
+    "high": "Wysoki"
+  },
+  "card": {
+    "years": "lat",
+    "months": "miesięcy",
+    "male": "Samiec",
+    "female": "Samica",
+    "urgent": "Pilne!",
+    "location": "Lokalizacja",
+    "readStory": "Czytaj historię",
+    "favorite": "Dodaj do ulubionych"
+  },
+  "empty": {
+    "title": "Pusto tu...",
+    "subtitle": "Może spróbuj zmienić kryteria?",
+    "showAll": "Pokaż wszystkie psy"
+  },
+  "footer": {
+    "tagline": "Bo każdy pies zasługuje na dom",
+    "copyright": "© 2024 Dogpile. Wszystkie prawa zastrzeżone."
+  },
+  "meta": {
+    "siteTitle": "Dogpile - Znajdź swojego psa",
+    "siteDescription": "Psy z polskich schronisk w jednym miejscu. Znajdź swojego najlepszego przyjaciela."
+  }
+}

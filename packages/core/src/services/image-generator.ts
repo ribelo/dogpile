@@ -2,25 +2,38 @@ import { Context, Effect, Layer } from "effect"
 import { OpenRouterClient } from "./openrouter/client.js"
 import { aiConfig } from "../config/ai.js"
 import type { ChatMessage } from "./openrouter/types.js"
+import professionalPromptTemplate from "../../prompts/image-professional.json"
+import funNosePromptTemplate from "../../prompts/image-fun-nose.json"
 
-export interface ImageGeneratorOutput {
+export interface GeneratedPhoto {
   readonly base64Url: string
 }
 
-export interface GenerateNosePhotoInput {
+export interface ImageGeneratorOutput {
+  readonly professional: GeneratedPhoto | null
+  readonly funNose: GeneratedPhoto | null
+}
+
+export interface GeneratePhotosInput {
   readonly dogDescription: string
   readonly referencePhotoUrl?: string
 }
 
 export interface ImageGenerator {
-  readonly generateNosePhoto: (
-    input: GenerateNosePhotoInput
+  readonly generatePhotos: (
+    input: GeneratePhotosInput
   ) => Effect.Effect<ImageGeneratorOutput | null, Error>
 }
 
 export const ImageGenerator = Context.GenericTag<ImageGenerator>(
   "@dogpile/ImageGenerator"
 )
+
+const buildPrompt = (template: typeof professionalPromptTemplate, dogDescription: string): string => {
+  const prompt = JSON.parse(JSON.stringify(template))
+  prompt.subject.description = dogDescription
+  return JSON.stringify(prompt)
+}
 
 export const ImageGeneratorLive = Layer.effect(
   ImageGenerator,
@@ -29,51 +42,66 @@ export const ImageGeneratorLive = Layer.effect(
     const config = yield* aiConfig
 
     return {
-      generateNosePhoto: (input: GenerateNosePhotoInput) =>
+      generatePhotos: (input: GeneratePhotosInput) =>
         Effect.gen(function* () {
-          const textPrompt = `Generate a cute, funny fisheye lens close-up photo of this dog's nose based on the reference photo. The dog: ${input.dogDescription}. Style: Close-up macro shot of the nose taking up most of the frame, with the face slightly distorted in fisheye style. High quality, studio lighting, white/neutral background.`
+          const professionalPrompt = buildPrompt(professionalPromptTemplate, input.dogDescription)
+          const funNosePrompt = buildPrompt(funNosePromptTemplate, input.dogDescription)
 
-          // Build message content - include reference image if provided
-          const messageContent: ChatMessage["content"] = input.referencePhotoUrl
-            ? [
-                {
-                  type: "image_url" as const,
-                  image_url: {
-                    url: input.referencePhotoUrl,
-                    detail: "high" as const,
+          const generateSinglePhoto = (prompt: string) =>
+            Effect.gen(function* () {
+              const messageContent: ChatMessage["content"] = input.referencePhotoUrl
+                ? [
+                    {
+                      type: "image_url" as const,
+                      image_url: {
+                        url: input.referencePhotoUrl,
+                        detail: "high" as const,
+                      },
+                    },
+                    {
+                      type: "text" as const,
+                      text: prompt,
+                    },
+                  ]
+                : prompt
+
+              const result = yield* client.chatCompletions({
+                model: config.imageGenerationModel,
+                messages: [
+                  {
+                    role: "user",
+                    content: messageContent,
                   },
+                ],
+                modalities: ["image", "text"],
+                image_config: {
+                  aspect_ratio: "4:5",
                 },
-                {
-                  type: "text" as const,
-                  text: textPrompt,
-                },
-              ]
-            : textPrompt
+              })
 
-          const result = yield* client.chatCompletions({
-            model: config.imageGenerationModel,
-            messages: [
-              {
-                role: "user",
-                content: messageContent,
-              },
-            ],
-            modalities: ["image", "text"],
-          })
+              const image = result.choices[0]?.message?.images?.[0]?.image_url?.url
+              if (!image) {
+                return null
+              }
 
-          const image = result.choices[0]?.message?.images?.[0]?.image_url?.url
-          if (!image) {
+              return { base64Url: image }
+            })
+
+          const [professional, funNose] = yield* Effect.all([
+            generateSinglePhoto(professionalPrompt).pipe(
+              Effect.catchAll(() => Effect.succeed(null))
+            ),
+            generateSinglePhoto(funNosePrompt).pipe(
+              Effect.catchAll(() => Effect.succeed(null))
+            ),
+          ], { concurrency: 2 })
+
+          if (!professional && !funNose) {
             return null
           }
 
-          return { base64Url: image }
-        }).pipe(
-          Effect.catchAll((e) =>
-            Effect.fail(
-              new Error(`Image generation failed: ${e instanceof Error ? e.message : String(e)}`)
-            )
-          )
-        ),
+          return { professional, funNose }
+        }),
     }
   })
 )

@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js"
 import type { Dog } from "./types"
+import ImageSlider from "./ImageSlider"
 
 interface Props {
   dog: Dog
@@ -44,22 +45,21 @@ export default function DogCard(props: Props) {
   const age = () => formatAge(props.dog.ageEstimate)
   const breed = () => formatBreed(props.dog.breedEstimates)
   const size = () => props.dog.sizeEstimate?.value
-  const photoUrl = () => props.dog.photos[0] || "/placeholder-dog.jpg"
 
   return (
-    <article class="group card h-full flex flex-col relative">
+    <article class="group card card-appear h-full flex flex-col relative !p-3">
       {props.dog.urgent && (
         <div class="absolute -top-2 -left-2 tag-urgent rotate-[-5deg] z-10 shadow-sm">
           Needs Sofa ASAP
         </div>
       )}
 
-      <div class="relative h-64 w-full overflow-hidden rounded-paper mb-4">
-        <img
-          src={photoUrl()}
-          alt={props.dog.name}
-          class="nostalgia-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-          loading="lazy"
+      <div class="relative aspect-[4/5] w-full overflow-hidden rounded-paper-img mb-4">
+        <ImageSlider 
+          photos={props.dog.photos} 
+          photosGenerated={props.dog.photosGenerated} 
+          alt={props.dog.name} 
+          class="h-full w-full" 
         />
         <div class="absolute top-4 right-4 flex gap-2">
           {age() && (
@@ -87,10 +87,19 @@ export default function DogCard(props: Props) {
           </div>
           <button
             onClick={toggleFavorite}
-            class="text-2xl text-sys-heart-core hover:scale-125 transition-transform"
+            class="text-sys-heart-core transition-transform hover:scale-110 active:scale-125"
+            class:heart-pop={isFavorite()}
             aria-label={isFavorite() ? "Remove from favorites" : "Add to favorites"}
           >
-            {isFavorite() ? "❤️" : "🤍"}
+            {isFavorite() ? (
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 10-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            ) : (
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            )}
           </button>
         </div>
 
@@ -116,14 +125,17 @@ export default function DogCard(props: Props) {
         </div>
       </div>
 
-      <div class="border-t-2 border-dashed border-sys-paper-shadow pt-3 mt-auto flex justify-between items-center px-2">
-        <span class="text-sm font-bold text-sys-ink-primary/50">
-          🏠 {props.dog.locationCity || props.dog.locationName || "Unknown"}
+      <div class="border-t-2 border-dashed border-sys-paper-shadow pt-3 mt-auto flex justify-between items-center">
+        <span class="text-sm font-bold text-sys-ink-primary/50 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          {props.dog.locationCity || props.dog.locationName || "Unknown"}
           {props.dog.isFoster && " (foster)"}
         </span>
         <a
-          href={`/dog/${props.dog.id}`}
-          class="text-sys-heart-core font-bold text-sm hover:underline"
+          href={`/dogs/${props.dog.id}`}
+          class="link-arrow text-sys-heart-core font-bold text-sm hover:underline"
         >
           Read Story
         </a>

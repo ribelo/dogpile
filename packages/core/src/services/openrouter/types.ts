@@ -159,6 +159,9 @@ export const ChatCompletionsRequest = Schema.Struct({
   top_p: Schema.optional(Schema.Number),
   response_format: Schema.optional(ResponseFormat),
   modalities: Schema.optional(Schema.Array(Schema.Literal("text", "image"))),
+  image_config: Schema.optional(Schema.Struct({
+    aspect_ratio: Schema.optional(Schema.String),
+  })),
 })
 
 export type ChatCompletionsRequest = typeof ChatCompletionsRequest.Type

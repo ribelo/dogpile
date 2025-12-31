@@ -21,6 +21,7 @@ export interface RawDogData {
   readonly personalityTags?: string[]
   readonly photos?: string[]
   readonly urgent?: boolean
+  readonly sourceUrl?: string
 }
 
 export interface ShelterAdapter {
@@ -30,7 +31,7 @@ export interface ShelterAdapter {
   readonly sourceUrl: string
   readonly city: string
   readonly fetch: (config: ScraperConfig) => Effect.Effect<string, ScrapeError, HttpClient.HttpClient>
-  readonly parse: (html: string, config: ScraperConfig) => Effect.Effect<readonly RawDogData[], ParseError>
+  readonly parse: (html: string, config: ScraperConfig) => Effect.Effect<readonly RawDogData[], ParseError, HttpClient.HttpClient>
   readonly transform: (raw: RawDogData, config: ScraperConfig) => Effect.Effect<CreateDogInput, ParseError>
 }
 

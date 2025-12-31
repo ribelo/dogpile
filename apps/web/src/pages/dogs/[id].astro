@@ -1,0 +1,132 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import Footer from '../../components/Footer.astro'
+import ImageSlider from '../../components/ImageSlider'
+
+const { id } = Astro.params
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787'
+const response = await fetch(`${API_URL}/dogs/${id}`)
+
+if (!response.ok) {
+  return Astro.redirect('/404')
+}
+
+const dog = await response.json()
+---
+
+<Layout title={`${dog.name} - Dogpile`}>
+  <main class="grain-overlay min-h-screen pt-12 pb-24 px-6">
+    <div class="max-w-4xl mx-auto">
+      <a href="/" class="link-arrow mb-12">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        Back to the pile
+      </a>
+
+      <div class="bg-sys-paper-card paper-edge overflow-hidden p-8 md:p-12">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
+          <!-- Photo Gallery -->
+          <div class="lg:col-span-7">
+            <div class="polaroid rotate-1 hover:rotate-0 transition-transform">
+              <ImageSlider 
+                client:load
+                photos={dog.photos || []} 
+                photosGenerated={dog.photosGenerated || []} 
+                alt={dog.name}
+                class="w-full aspect-[4/3] rounded-sm"
+              />
+            </div>
+          </div>
+
+          <!-- Content -->
+          <div class="lg:col-span-5 space-y-8">
+            <header>
+              <div class="flex flex-wrap items-center gap-3 mb-2">
+                <h1 class="text-6xl font-black">{dog.name}</h1>
+                {dog.urgent && <span class="tag-urgent">URGENT!</span>}
+              </div>
+              <p class="text-xl font-narrative opacity-60">Looking for a soft place to land</p>
+            </header>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 gap-4">
+              {dog.ageEstimate && (
+                <div class="bg-white/50 p-4 paper-edge-alt border-2 border-sys-paper-shadow flex flex-col items-center text-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <span class="text-xs font-bold uppercase tracking-wider opacity-40 mb-1">Age</span>
+                  <span class="font-title text-lg">~{Math.round(dog.ageEstimate.months / 12)} years</span>
+                </div>
+              )}
+              {dog.sizeEstimate && (
+                <div class="bg-white/50 p-4 paper-edge-alt border-2 border-sys-paper-shadow flex flex-col items-center text-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11V4h7M11 20h9v-7"/></svg>
+                  <span class="text-xs font-bold uppercase tracking-wider opacity-40 mb-1">Size</span>
+                  <span class="font-title text-lg uppercase">{dog.sizeEstimate.value}</span>
+                </div>
+              )}
+              {dog.breedEstimates?.[0] && (
+                <div class="bg-white/50 p-4 paper-edge-alt border-2 border-sys-paper-shadow flex flex-col items-center text-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                  <span class="text-xs font-bold uppercase tracking-wider opacity-40 mb-1">Breed</span>
+                  <span class="font-title text-lg">{dog.breedEstimates[0].breed}</span>
+                </div>
+              )}
+              {dog.locationCity && (
+                <div class="bg-white/50 p-4 paper-edge-alt border-2 border-sys-paper-shadow flex flex-col items-center text-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  <span class="text-xs font-bold uppercase tracking-wider opacity-40 mb-1">Location</span>
+                  <span class="font-title text-lg">{dog.locationCity}</span>
+                </div>
+              )}
+            </div>
+
+            <!-- Health & Compatibility -->
+            <div class="space-y-4">
+              <div class="flex flex-wrap gap-2">
+                {dog.goodWithKids && <span class="tag-grass italic">Good with kids</span>}
+                {dog.goodWithDogs && <span class="tag-grass italic">Good with dogs</span>}
+                {dog.goodWithCats && <span class="tag-grass italic">Good with cats</span>}
+              </div>
+              
+              <div class="flex flex-wrap gap-4 text-sm font-bold opacity-60">
+                {dog.vaccinated && <span class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-sys-nature-grass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Vaccinated</span>}
+                {dog.sterilized && <span class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-sys-nature-grass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Sterilized</span>}
+                {dog.chipped && <span class="flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-sys-nature-grass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Chipped</span>}
+              </div>
+            </div>
+
+            <a href={dog.sourceUrl} target="_blank" rel="noopener noreferrer" class="btn-primary w-full text-center block text-2xl lowercase">
+              say hello to {dog.name}
+            </a>
+          </div>
+        </div>
+
+        <!-- Bio & Tags -->
+        <div class="mt-20 grid grid-cols-1 lg:grid-cols-12 gap-12">
+          <div class="lg:col-span-8">
+            <h2 class="text-4xl mb-6">About this friend</h2>
+            <blockquote class="bg-sys-cheek-blush/20 p-8 paper-edge-alt font-narrative text-2xl leading-relaxed italic border-l-4 border-sys-heart-soft">
+              <p set:html={dog.generatedBio || dog.rawDescription} />
+            </blockquote>
+          </div>
+          
+          <div class="lg:col-span-4">
+            {dog.personalityTags?.length > 0 && (
+              <div class="space-y-6">
+                <h3 class="text-3xl">Vibe Check</h3>
+                <div class="flex flex-wrap gap-2">
+                  {dog.personalityTags.map((tag: string) => (
+                    <span class="tag-sky text-lg px-4 py-2">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <Footer />
+</Layout>

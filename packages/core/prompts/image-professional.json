@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "task": "Professional Dog Portrait",
+    "style_reference": "Studio ID Photo"
+  },
+  "subject": {
+    "description": "{{DOG_DESCRIPTION}}",
+    "positioning": {
+      "framing": "medium close-up",
+      "body_visible": "head, neck, and upper chest",
+      "alignment": "centered",
+      "eye_contact": "looking directly at camera lens"
+    },
+    "expression": "friendly, soft, approachable, slight smile or panting",
+    "focus": "sharp focus on eyes and nose"
+  },
+  "photography": {
+    "camera_gear": {
+      "type": "High-end DSLR",
+      "lens": "85mm portrait lens",
+      "aperture": "f/4.0"
+    },
+    "lighting": {
+      "setup": "three-point studio lighting",
+      "key_light": "large softbox from front-left",
+      "fill_light": "soft warm fill",
+      "catchlights": "visible reflection in eyes",
+      "shadows": "soft, minimal shadows under chin"
+    },
+    "texture": {
+      "quality": "highly detailed fur texture",
+      "finish": "clean, commercial photography",
+      "artifacts": "none"
+    }
+  },
+  "background": {
+    "type": "studio seamless paper",
+    "color_name": "warm cream",
+    "hex_code": "#fbf8f3",
+    "details": "solid color, uniform lighting, no patterns, no props, no horizon line",
+    "atmosphere": "warm, inviting, safe"
+  }
+}

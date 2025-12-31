@@ -5,25 +5,25 @@ compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "dogpile-db"
-database_id = "ea4a4ec7-ad28-4219-a86f-5054bc79b21c"
+database_name = "dogpile-db-preview"
+database_id = "ebaccb4b-50f9-4aa9-b155-577e319dbd15"
 preview_database_id = "ebaccb4b-50f9-4aa9-b155-577e319dbd15"
 migrations_dir = "../../packages/db/migrations"
 
 [[kv_namespaces]]
 binding = "KV"
 id = "53504d090fba4bdf8e2313da14b37720"
-preview_id = "bedd941d19a44eec960c8c66fdae55b9"
+preview_id = "53504d090fba4bdf8e2313da14b37720"
 
 [[r2_buckets]]
 binding = "PHOTOS_ORIGINAL"
 bucket_name = "dogpile"
-preview_bucket_name = "dogpile-preview"
+preview_bucket_name = "dogpile"
 
 [[r2_buckets]]
 binding = "PHOTOS_GENERATED"
 bucket_name = "dogpile-generated"
-preview_bucket_name = "dogpile-generated-preview"
+preview_bucket_name = "dogpile-generated"
 
 [[vectorize]]
 binding = "VECTORIZE"

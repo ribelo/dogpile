@@ -8,6 +8,13 @@ import { writeFileSync, unlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+
+// R2 public domain for generated photos
+const R2_GENERATED_DOMAIN = "https://dogpile-generated.extropy.club"
+
+const toPublicUrl = (key: string): string =>
+  `${R2_GENERATED_DOMAIN}/${encodeURIComponent(key)}`
+
 // Import core services
 import {
   OpenRouterClientLive,
@@ -296,26 +303,40 @@ const processCommand = (scraperId: string) =>
         }
 
         // Generate fisheye nose photo (optional, expensive)
-        let generatedPhotoUrl: string | null = null
+        const generatedPhotoUrls: string[] = []
         if (bio?.bio && getBoolFlag(parsed.flags, "generate-photos")) {
-          yield* Console.log(`   🎨 Generating nose photo...`)
-          const imgResult = yield* imageGenerator.generateNosePhoto({ dogDescription: bio.bio, referencePhotoUrl: dog.photos?.[0] }).pipe(
+          yield* Console.log(`   🎨 Generating AI photos...`)
+          const imgResult = yield* imageGenerator.generatePhotos({ dogDescription: bio.bio, referencePhotoUrl: dog.photos?.[0] }).pipe(
             Effect.catchAll((e) => {
               console.log(`   ⚠️ Image gen failed: ${e.message}`)
               return Effect.succeed(null)
             })
           )
-          if (imgResult) {
-            const r2Key = `${dog.fingerprint}-nose.png`
-            yield* Console.log(`   ☁️ Uploading to R2...`)
-            const uploadedKey = yield* uploadToR2(imgResult.base64Url, r2Key).pipe(
+          if (imgResult?.professional) {
+            const r2Key = `${dog.fingerprint}-professional.png`
+            yield* Console.log(`   ☁️ Uploading professional photo to R2...`)
+            const uploadedKey = yield* uploadToR2(imgResult.professional.base64Url, r2Key).pipe(
               Effect.catchAll((e) => {
                 console.log(`   ⚠️ R2 upload failed: ${e.message}`)
                 return Effect.succeed(null)
               })
             )
             if (uploadedKey) {
-              generatedPhotoUrl = uploadedKey
+              generatedPhotoUrls.push(toPublicUrl(uploadedKey))
+              yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
+            }
+          }
+          if (imgResult?.funNose) {
+            const r2Key = `${dog.fingerprint}-nose.png`
+            yield* Console.log(`   ☁️ Uploading fun nose photo to R2...`)
+            const uploadedKey = yield* uploadToR2(imgResult.funNose.base64Url, r2Key).pipe(
+              Effect.catchAll((e) => {
+                console.log(`   ⚠️ R2 upload failed: ${e.message}`)
+                return Effect.succeed(null)
+              })
+            )
+            if (uploadedKey) {
+              generatedPhotoUrls.push(toPublicUrl(uploadedKey))
               yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
             }
           }
@@ -364,7 +385,7 @@ const processCommand = (scraperId: string) =>
             ${photoResult?.earType ? `'${esc(photoResult.earType)}'` : 'NULL'},
             ${photoResult?.tailType ? `'${esc(photoResult.tailType)}'` : 'NULL'},
             '${esc(bio?.bio ?? "")}',
-            '${esc(JSON.stringify(generatedPhotoUrl ? [generatedPhotoUrl] : []))}'
+            '${esc(JSON.stringify(generatedPhotoUrls))}'
           ) ON CONFLICT(fingerprint) DO UPDATE SET
             updated_at = ${now}, last_seen_at = ${now},
             raw_description = excluded.raw_description,
@@ -435,8 +456,8 @@ const regeneratePhotosCommand = () =>
           return
         }
 
-        yield* Console.log(`   🎨 Generating nose photo...`)
-        const imgResult = yield* imageGen.generateNosePhoto({
+        yield* Console.log(`   🎨 Generating AI photos...`)
+        const imgResult = yield* imageGen.generatePhotos({
           dogDescription: bio,
           referencePhotoUrl: photos[0],
         }).pipe(
@@ -446,29 +467,47 @@ const regeneratePhotosCommand = () =>
           })
         )
 
-        if (imgResult) {
-          const r2Key = `${dog.fingerprint}-nose.png`
-          yield* Console.log(`   ☁️ Uploading to R2...`)
-          const uploadedKey = yield* uploadToR2(imgResult.base64Url, r2Key).pipe(
+        const generatedPhotoUrls: string[] = []
+        if (imgResult?.professional) {
+          const r2Key = `${dog.fingerprint}-professional.png`
+          yield* Console.log(`   ☁️ Uploading professional photo to R2...`)
+          const uploadedKey = yield* uploadToR2(imgResult.professional.base64Url, r2Key).pipe(
             Effect.catchAll((e) => {
               console.log(`   ⚠️ R2 upload failed: ${e.message}`)
               return Effect.succeed(null)
             })
           )
-
           if (uploadedKey) {
+            generatedPhotoUrls.push(toPublicUrl(uploadedKey))
             yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
-            // Update DB
-            const photosGenerated = JSON.stringify([uploadedKey])
-            const sql = `UPDATE dogs SET photos_generated = '${photosGenerated.replace(/'/g, "''")}' WHERE id = '${dog.id}'`
-            yield* execSql(sql).pipe(
-              Effect.catchAll((e) => {
-                console.log(`   ⚠️ DB update failed: ${e}`)
-                return Effect.succeed(null)
-              })
-            )
-            yield* Console.log(`   💾 Saved`)
           }
+        }
+
+        if (imgResult?.funNose) {
+          const r2Key = `${dog.fingerprint}-nose.png`
+          yield* Console.log(`   ☁️ Uploading fun nose photo to R2...`)
+          const uploadedKey = yield* uploadToR2(imgResult.funNose.base64Url, r2Key).pipe(
+            Effect.catchAll((e) => {
+              console.log(`   ⚠️ R2 upload failed: ${e.message}`)
+              return Effect.succeed(null)
+            })
+          )
+          if (uploadedKey) {
+            generatedPhotoUrls.push(toPublicUrl(uploadedKey))
+            yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
+          }
+        }
+
+        if (generatedPhotoUrls.length > 0) {
+          const photosGenerated = JSON.stringify(generatedPhotoUrls)
+          const sql = `UPDATE dogs SET photos_generated = '${photosGenerated.replace(/'/g, "''")}' WHERE id = '${dog.id}'`
+          yield* execSql(sql).pipe(
+            Effect.catchAll((e) => {
+              console.log(`   ⚠️ DB update failed: ${e}`)
+              return Effect.succeed(null)
+            })
+          )
+          yield* Console.log(`   💾 Saved ${generatedPhotoUrls.length} photos`)
         }
       })
 

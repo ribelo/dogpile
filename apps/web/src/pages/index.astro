@@ -1,23 +1,24 @@
 ---
 import Layout from '../layouts/Layout.astro'
 import DogGrid from '../components/DogGrid'
+import Hero from '../components/Hero.astro'
+import FilterBar from '../components/FilterBar.astro'
+import Footer from '../components/Footer.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
 ---
 
 <Layout title="Dogpile - Znajdź swojego psa">
-  <main class="container mx-auto px-4 py-8">
-    <h1 class="text-4xl font-bold mb-8 text-center">
-      Psy czekające na adopcję
-    </h1>
-    
-    <div class="mb-6 flex gap-4 flex-wrap justify-center">
-      <input 
-        type="text" 
-        placeholder="Szukaj..." 
-        class="px-4 py-2 border rounded-lg w-full max-w-md"
-        id="search-input"
-      />
-    </div>
-
-    <DogGrid client:load />
-  </main>
+  <div class="grain-overlay min-h-screen">
+    <Hero />
+    <FilterBar />
+    <main class="max-w-6xl mx-auto px-4 py-12">
+     <div class="flex justify-between items-end mb-12">
+        <h2 class="font-title text-4xl font-bold text-sys-ink-primary">sniff around</h2>
+       <a href="/dogs" class="link-arrow text-lg">View all stories →</a>
+      </div>
+      <DogGrid client:load apiUrl={API_URL} />
+    </main>
+    <Footer />
+  </div>
 </Layout>

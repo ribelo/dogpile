@@ -1,10 +1,11 @@
 ---
+import LanguageSwitcher from './LanguageSwitcher'
 ---
 
 <footer class="bg-sys-ink-primary text-sys-paper-base relative overflow-hidden">
   <div class="max-w-4xl mx-auto px-6 py-20 text-center relative z-10">
     <div class="text-sys-heart-soft mb-6 text-4xl animate-bounce">
-      ❤️
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 mx-auto" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
     </div>
     <h2 class="font-title text-5xl font-black mb-6 lowercase">
       Love is a verb.
@@ -13,9 +14,14 @@
       Structure is expensive, but love is free. We assume the logistical burden to ensure 
       every dog in Poland finds a soft place to land.
     </p>
-    <div class="flex justify-center gap-6 text-sm font-bold text-sys-paper-base/50">
-      <span>© Dogpile 2024</span>
-      <span>Made with 🐾 in Poland</span>
+    <div class="flex flex-col items-center gap-6">
+      <div class="flex justify-center gap-6 text-sm font-bold text-sys-paper-base/50">
+        <span>© Dogpile 2025</span>
+        <span class="flex items-center gap-1">Made with <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M4.5 10c-1.38 0-2.5-1.12-2.5-2.5S3.12 5 4.5 5 7 6.12 7 7.5 5.88 10 4.5 10zm4-4C7.12 6 6 4.88 6 3.5S7.12 1 8.5 1 11 2.12 11 3.5 9.88 6 8.5 6zm7 0c-1.38 0-2.5-1.12-2.5-2.5S14.12 1 15.5 1 18 2.12 18 3.5 16.88 6 15.5 6zm4 4c-1.38 0-2.5-1.12-2.5-2.5S18.12 5 19.5 5 22 6.12 22 7.5 20.88 10 19.5 10zm-7.5 2c-3.04 0-5.5 2.46-5.5 5.5 0 2.22 1.31 4.14 3.19 5.01l.31.14c1.28.58 2.72.58 4 0l.31-.14c1.88-.87 3.19-2.79 3.19-5.01 0-3.04-2.46-5.5-5.5-5.5z"/></svg> in Poland</span>
+      </div>
+      <div class="text-sys-paper-base/50">
+        <LanguageSwitcher client:load />
+      </div>
     </div>
   </div>
   

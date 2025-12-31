@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "task": "Fun Dog Portrait",
+    "style_reference": "Wide Angle Pet Photography",
+    "effect": "Big Nose / Fisheye"
+  },
+  "subject": {
+    "description": "{{DOG_DESCRIPTION}}",
+    "positioning": {
+      "framing": "extreme close-up selfie style",
+      "body_visible": "face dominant, body receding into background",
+      "alignment": "centered",
+      "eye_contact": "looking deeply into the lens",
+      "focus_point": "snout and nose"
+    },
+    "expression": "curious, goofy, sniffing the camera, adorable puppy eyes",
+    "focus": "nose is sharp and enlarged, ears might be slightly soft focus"
+  },
+  "photography": {
+    "camera_gear": {
+      "type": "High-end DSLR",
+      "lens": "10mm ultra-wide fisheye lens",
+      "perspective": "forced perspective, exaggerated snout size",
+      "aperture": "f/2.8"
+    },
+    "lighting": {
+      "setup": "bright high-key studio lighting",
+      "key_light": "large softbox centered above camera",
+      "fill_light": "ample fill to illuminate the nose texture",
+      "catchlights": "bright reflection in eyes",
+      "shadows": "very minimal"
+    },
+    "texture": {
+      "quality": "highly detailed wet nose texture",
+      "finish": "playful, vibrant",
+      "artifacts": "none"
+    }
+  },
+  "background": {
+    "type": "studio seamless paper",
+    "color_name": "warm cream",
+    "hex_code": "#fbf8f3",
+    "details": "solid color, uniform lighting, blurred due to depth of field",
+    "atmosphere": "fun, energetic, quirky"
+  }
+}

@@ -56,6 +56,13 @@ export default {
       borderRadius: {
         paper: "255px 15px 225px 15px / 15px 225px 15px 255px",
         "paper-alt": "15px 255px 15px 225px / 225px 15px 255px 15px",
+        "paper-img": "200px 10px 200px 10px / 10px 200px 10px 200px",
+        "paper-img-alt": "10px 200px 10px 200px / 200px 10px 200px 10px",
+        "paper-oval": "150px 150px 20px 20px / 20px 20px 150px 150px",
+      },
+      boxShadow: {
+        paper: "4px 4px 0 #eaddcf, 8px 8px 0 rgba(0,0,0,0.03)",
+        "paper-lift": "8px 8px 0 #eaddcf, 12px 12px 0 rgba(0,0,0,0.05)",
       },
     },
   },
