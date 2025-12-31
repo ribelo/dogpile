@@ -1,4 +1,7 @@
 ---
+import { t, type Language } from '../i18n'
+
+const lang = (Astro.currentLocale as Language) || 'pl'
 ---
 
 <header class="relative z-10 max-w-6xl mx-auto px-4 grid md:grid-cols-2 gap-12 items-center py-24">
@@ -7,17 +10,15 @@
       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
       </svg>
-      Poland Wide // Public Good
+      {t('hero.badge', lang)}
     </span>
-    <h1 class="font-title text-6xl md:text-7xl font-black text-sys-ink-primary mb-6 leading-[0.9] lowercase">
-      The pile is <br /><span class="text-sys-heart-core italic">waiting.</span>
-    </h1>
+    <h1 class="font-title text-6xl md:text-7xl font-black text-sys-ink-primary mb-6 leading-[0.9] lowercase" set:html={t('hero.headline', lang)} />
     <p class="text-xl text-sys-ink-primary/80 mb-8 max-w-md leading-relaxed">
-      From the Baltic to the Tatras, thousands of good dogs are waiting for a human hand. We collect them all in one cozy place, so you can find the one that fits your life.
+      {t('hero.subheadline', lang)}
     </p>
     <div class="flex flex-wrap gap-4 items-center">
       <a href="#dogs" class="bg-sys-ink-primary text-sys-paper-base font-bold text-lg py-4 px-8 paper-edge hover:bg-sys-heart-core transition-colors flex items-center gap-2 no-underline">
-        Meet the Dogs
+        {t('hero.cta', lang)}
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-sys-heart-soft" viewBox="0 0 24 24" fill="currentColor">
           <path d="M7 14c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-5-4c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-3-3c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
         </svg>
@@ -28,7 +29,7 @@
           <img src="https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=100&h=100&fit=crop" class="w-10 h-10 rounded-full border-2 border-sys-paper-base object-cover" alt="dog 2" />
           <img src="https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=100&h=100&fit=crop" class="w-10 h-10 rounded-full border-2 border-sys-paper-base object-cover" alt="dog 3" />
         </div>
-        <span class="text-sm font-bold opacity-70">12 found homes today</span>
+        <span class="text-sm font-bold opacity-70">{t('hero.stats', lang)}</span>
       </div>
     </div>
   </div>

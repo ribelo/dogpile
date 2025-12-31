@@ -4,18 +4,19 @@ import DogGrid from '../components/DogGrid'
 import Hero from '../components/Hero.astro'
 import FilterBar from '../components/FilterBar.astro'
 import Footer from '../components/Footer.astro'
+import { t } from '../i18n'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
 ---
 
-<Layout title="Dogpile - Znajdź swojego psa">
+<Layout title={t('meta.siteTitle')}>
   <div class="grain-overlay min-h-screen">
     <Hero />
     <FilterBar />
     <main class="max-w-6xl mx-auto px-4 py-12">
      <div class="flex justify-between items-end mb-12">
-        <h2 class="font-title text-4xl font-bold text-sys-ink-primary">sniff around</h2>
-       <a href="/dogs" class="link-arrow text-lg">View all stories →</a>
+        <h2 class="font-title text-4xl font-bold text-sys-ink-primary">{t('home.sniffAround')}</h2>
+       <a href="/dogs" class="link-arrow text-lg">{t('home.viewAllStories')}</a>
       </div>
       <DogGrid client:load apiUrl={API_URL} />
     </main>

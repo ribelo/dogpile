@@ -1,9 +1,10 @@
 {
   "hero": {
-    "headline": "Your new best friend is already waiting here.",
-    "subheadline": "Dogs from all over the country in one place. Find the one.",
-    "cta": "Meet the dogs",
-    "stats": "12 found homes"
+    "badge": "Poland Wide // Public Good",
+    "headline": "The pile is <br /><span class=\"text-sys-heart-core italic\">waiting.</span>",
+    "subheadline": "From the Baltic to the Tatras, thousands of good dogs are waiting for a human hand. We collect them all in one cozy place, so you can find the one that fits your life.",
+    "cta": "Meet the Dogs",
+    "stats": "12 found homes today"
   },
   "search": {
     "placeholder": "Search for a dog...",
@@ -15,9 +16,18 @@
     "location": "Location",
     "size": "Size",
     "age": "Age",
+    "vibe": "Vibe",
     "energy": "Energy",
     "anywhere": "Anywhere (Poland)",
     "doesntMatter": "Doesn't matter",
+    "allPersonalities": "All Personalities",
+    "couchPotato": "Couch Potato",
+    "athlete": "Athlete",
+    "scholar": "Scholar",
+    "pocketSized": "Pocket Sized",
+    "armful": "Armful",
+    "bigBear": "Big Bear",
+    "startSniffing": "Start Sniffing",
     "puppies": "Puppies",
     "small": "Small",
     "medium": "Medium",
@@ -45,6 +55,10 @@
   "footer": {
     "tagline": "Because every dog deserves a home",
     "copyright": "© 2024 Dogpile. All rights reserved."
+  },
+  "home": {
+    "sniffAround": "sniff around",
+    "viewAllStories": "View all stories →"
   },
   "meta": {
     "siteTitle": "Dogpile - Find your dog",

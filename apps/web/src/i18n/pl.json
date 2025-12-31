@@ -1,5 +1,6 @@
 {
   "hero": {
+    "badge": "Cała Polska // Wspólne Dobro",
     "headline": "Twój nowy najlepszy przyjaciel już tu czeka.",
     "subheadline": "Psy z całego kraju w jednym miejscu. Znajdź tego jedynego.",
     "cta": "Poznaj psy",
@@ -15,9 +16,18 @@
     "location": "Lokalizacja",
     "size": "Rozmiar",
     "age": "Wiek",
+    "vibe": "Charakter",
     "energy": "Energia",
     "anywhere": "Gdziekolwiek (Polska)",
     "doesntMatter": "Nie ma znaczenia",
+    "allPersonalities": "Wszystkie charaktery",
+    "couchPotato": "Kanapowiec",
+    "athlete": "Sportowiec",
+    "scholar": "Uczony",
+    "pocketSized": "Kieszonkowy",
+    "armful": "Naręcze",
+    "bigBear": "Wielki miś",
+    "startSniffing": "Zacznij niuchać",
     "puppies": "Szczeniaki",
     "small": "Małe",
     "medium": "Średnie",
@@ -45,6 +55,10 @@
   "footer": {
     "tagline": "Bo każdy pies zasługuje na dom",
     "copyright": "© 2024 Dogpile. Wszystkie prawa zastrzeżone."
+  },
+  "home": {
+    "sniffAround": "poniuchaj",
+    "viewAllStories": "Zobacz wszystkie historie →"
   },
   "meta": {
     "siteTitle": "Dogpile - Znajdź swojego psa",
