@@ -12,6 +12,8 @@ interface Env {
   OPENROUTER_API_KEY: string
   ENVIRONMENT: string
   R2_PUBLIC_DOMAIN?: string
+  IMAGE_QUEUE?: Queue<{ dogId: string; urls: string[] }>
+  ADMIN_KEY?: string
 }
 
 type RouteHandler = (
@@ -174,6 +176,52 @@ const routes: Route[] = [
         found: updates.length, 
         updated,
         sample: updates.slice(0, 3)
+      })
+    }),
+  },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/admin/backfill-images" }),
+    handler: (req, env) => Effect.gen(function* () {
+      const auth = req.headers.get("Authorization")
+      if (!env.ADMIN_KEY || auth !== `Bearer ${env.ADMIN_KEY}`) {
+        return yield* json({ error: "Unauthorized" }, 401)
+      }
+
+      if (!env.IMAGE_QUEUE) {
+        return yield* json({ error: "IMAGE_QUEUE not configured" }, 500)
+      }
+
+      const db = drizzle(env.DB)
+      
+      const allDogs = yield* Effect.promise(() =>
+        db.select({ id: dogs.id, photos: dogs.photos })
+          .from(dogs)
+          .where(eq(dogs.status, "available"))
+          .all()
+      )
+
+      const jobs: { body: { dogId: string; urls: string[] } }[] = []
+
+      for (const dog of allDogs) {
+        const externalUrls = (dog.photos || []).filter((p: string) => p.startsWith("http"))
+        if (externalUrls.length > 0) {
+          jobs.push({ body: { dogId: dog.id, urls: externalUrls } })
+        }
+      }
+
+      if (jobs.length > 0) {
+        const batchSize = 100
+        for (let i = 0; i < jobs.length; i += batchSize) {
+          const chunk = jobs.slice(i, i + batchSize)
+          yield* Effect.promise(() => env.IMAGE_QUEUE!.sendBatch(chunk))
+        }
+      }
+
+      return yield* json({
+        status: "ok",
+        scanned: allDogs.length,
+        enqueued: jobs.length
       })
     }),
   },

@@ -25,6 +25,10 @@ binding = "PHOTOS_GENERATED"
 bucket_name = "dogpile-generated"
 preview_bucket_name = "dogpile-generated"
 
+[[queues.producers]]
+binding = "IMAGE_QUEUE"
+queue = "dogpile-image-jobs"
+
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "dogpile-dogs"
