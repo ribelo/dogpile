@@ -59,7 +59,8 @@ export default function DogCard(props: Props) {
           photos={props.dog.photos} 
           photosGenerated={props.dog.photosGenerated} 
           alt={props.dog.name} 
-          class="h-full w-full" 
+          class="h-full w-full"
+          size="sm"
         />
         <div class="absolute top-4 right-4 flex gap-2">
           {age() && (

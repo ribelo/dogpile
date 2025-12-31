@@ -9,6 +9,15 @@ max_batch_size = 1
 max_retries = 3
 
 [[queues.producers]]
+binding = "IMAGE_QUEUE"
+queue = "dogpile-image-jobs"
+
+[[queues.consumers]]
+queue = "dogpile-image-jobs"
+max_batch_size = 5
+max_retries = 3
+
+[[queues.producers]]
 binding = "REINDEX_QUEUE"
 queue = "dogpile-reindex-jobs"
 
@@ -27,3 +36,6 @@ preview_bucket_name = "dogpile"
 binding = "KV"
 id = "53504d090fba4bdf8e2313da14b37720"
 preview_id = "53504d090fba4bdf8e2313da14b37720"
+
+[images]
+binding = "IMAGES"

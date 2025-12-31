@@ -13,12 +13,15 @@ import {
   DescriptionGeneratorLive,
   OpenRouterClientLive,
 } from "@dogpile/core/services"
+import { handleImageJobs, type ImageJob, type ImagesBinding } from "./image-handler.js"
 
 interface Env {
   DB: D1Database
   KV: KVNamespace
   PHOTOS_ORIGINAL: R2Bucket
   REINDEX_QUEUE: Queue<ReindexJob>
+  IMAGE_QUEUE: Queue<ImageJob>
+  IMAGES: ImagesBinding
   OPENROUTER_API_KEY: string
 }
 
@@ -36,11 +39,16 @@ interface ReindexJob {
 
 export default {
   async queue(
-    batch: MessageBatch<ScrapeJob>,
+    batch: MessageBatch<ScrapeJob | ImageJob>,
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
-    for (const message of batch.messages) {
+    if (batch.queue === "dogpile-image-jobs") {
+      return handleImageJobs(batch as MessageBatch<ImageJob>, env, ctx)
+    }
+
+    const scrapeMessages = batch as MessageBatch<ScrapeJob>
+    for (const message of scrapeMessages.messages) {
       const job = message.body
 
       const program = Effect.gen(function* () {
@@ -220,6 +228,17 @@ export default {
               dogId: id,
               description: bioResult?.bio ?? dog.generatedBio ?? undefined,
             })
+
+            if (dog.photos && dog.photos.length > 0) {
+              const externalUrls = dog.photos.filter((url: string) => url.startsWith("http"))
+              if (externalUrls.length > 0) {
+                yield* Effect.tryPromise({
+                  try: () => env.IMAGE_QUEUE.send({ dogId: id, urls: externalUrls }),
+                  catch: (e) => new Error(`Failed to enqueue image job: ${e}`),
+                })
+              }
+            }
+
             added++
           } else {
             yield* Effect.tryPromise({

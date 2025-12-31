@@ -7,13 +7,11 @@ import { $ } from "bun"
 import { writeFileSync, unlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import sharp from "sharp"
 
-
-// R2 public domain for generated photos
-const R2_GENERATED_DOMAIN = "https://dogpile-generated.extropy.club"
 
 const toPublicUrl = (key: string): string =>
-  `${R2_GENERATED_DOMAIN}/${encodeURIComponent(key)}`
+  `generated/${key}`
 
 // Import core services
 import {
@@ -124,22 +122,31 @@ const execSql = (sql: string) =>
     catch: (e) => new Error(`SQL failed: ${e}`)
   })
 
-const uploadToR2 = (base64Data: string, key: string) =>
+const uploadToR2WithOptimization = (base64Data: string, baseKey: string) =>
   Effect.tryPromise({
     try: async () => {
-      // Decode base64 to temp file
       const data = base64Data.replace(/^data:image\/\w+;base64,/, "")
       const buffer = Buffer.from(data, "base64")
-      const tmpPath = join(tmpdir(), `dogpile-${Date.now()}.png`)
-      writeFileSync(tmpPath, buffer)
 
-      // Upload via wrangler r2
-      await $`bunx wrangler r2 object put dogpile-generated/${key} --remote --file ${tmpPath}`.quiet()
+      const [smBuffer, lgBuffer] = await Promise.all([
+        sharp(buffer).resize(400).webp({ quality: 80 }).toBuffer(),
+        sharp(buffer).resize(1200).webp({ quality: 85 }).toBuffer(),
+      ])
 
-      // Cleanup temp file
-      unlinkSync(tmpPath)
+      const tmpSm = join(tmpdir(), `dogpile-${Date.now()}-sm.webp`)
+      const tmpLg = join(tmpdir(), `dogpile-${Date.now()}-lg.webp`)
+      writeFileSync(tmpSm, smBuffer)
+      writeFileSync(tmpLg, lgBuffer)
 
-      return key
+      await Promise.all([
+        $`bunx wrangler r2 object put dogpile-generated/${baseKey}-sm.webp --remote --file ${tmpSm}`.quiet(),
+        $`bunx wrangler r2 object put dogpile-generated/${baseKey}-lg.webp --remote --file ${tmpLg}`.quiet(),
+      ])
+
+      unlinkSync(tmpSm)
+      unlinkSync(tmpLg)
+
+      return baseKey
     },
     catch: (e) => new Error(`R2 upload failed: ${e}`)
   })
@@ -313,9 +320,9 @@ const processCommand = (scraperId: string) =>
             })
           )
           if (imgResult?.professional) {
-            const r2Key = `${dog.fingerprint}-professional.png`
+            const r2Key = `${dog.fingerprint}-professional`
             yield* Console.log(`   ☁️ Uploading professional photo to R2...`)
-            const uploadedKey = yield* uploadToR2(imgResult.professional.base64Url, r2Key).pipe(
+            const uploadedKey = yield* uploadToR2WithOptimization(imgResult.professional.base64Url, r2Key).pipe(
               Effect.catchAll((e) => {
                 console.log(`   ⚠️ R2 upload failed: ${e.message}`)
                 return Effect.succeed(null)
@@ -327,9 +334,9 @@ const processCommand = (scraperId: string) =>
             }
           }
           if (imgResult?.funNose) {
-            const r2Key = `${dog.fingerprint}-nose.png`
+            const r2Key = `${dog.fingerprint}-nose`
             yield* Console.log(`   ☁️ Uploading fun nose photo to R2...`)
-            const uploadedKey = yield* uploadToR2(imgResult.funNose.base64Url, r2Key).pipe(
+            const uploadedKey = yield* uploadToR2WithOptimization(imgResult.funNose.base64Url, r2Key).pipe(
               Effect.catchAll((e) => {
                 console.log(`   ⚠️ R2 upload failed: ${e.message}`)
                 return Effect.succeed(null)
@@ -469,9 +476,9 @@ const regeneratePhotosCommand = () =>
 
         const generatedPhotoUrls: string[] = []
         if (imgResult?.professional) {
-          const r2Key = `${dog.fingerprint}-professional.png`
+          const r2Key = `${dog.fingerprint}-professional`
           yield* Console.log(`   ☁️ Uploading professional photo to R2...`)
-          const uploadedKey = yield* uploadToR2(imgResult.professional.base64Url, r2Key).pipe(
+          const uploadedKey = yield* uploadToR2WithOptimization(imgResult.professional.base64Url, r2Key).pipe(
             Effect.catchAll((e) => {
               console.log(`   ⚠️ R2 upload failed: ${e.message}`)
               return Effect.succeed(null)
@@ -484,9 +491,9 @@ const regeneratePhotosCommand = () =>
         }
 
         if (imgResult?.funNose) {
-          const r2Key = `${dog.fingerprint}-nose.png`
+          const r2Key = `${dog.fingerprint}-nose`
           yield* Console.log(`   ☁️ Uploading fun nose photo to R2...`)
-          const uploadedKey = yield* uploadToR2(imgResult.funNose.base64Url, r2Key).pipe(
+          const uploadedKey = yield* uploadToR2WithOptimization(imgResult.funNose.base64Url, r2Key).pipe(
             Effect.catchAll((e) => {
               console.log(`   ⚠️ R2 upload failed: ${e.message}`)
               return Effect.succeed(null)

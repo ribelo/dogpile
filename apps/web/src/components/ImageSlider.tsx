@@ -1,18 +1,25 @@
 import { createSignal, Show, For } from "solid-js"
+import { getPhotoUrl, getPhotoSrcSet } from "../utils/photo-url"
 
 interface Props {
   photos: string[]
   photosGenerated: string[]
   alt: string
   class?: string
+  size?: "sm" | "lg"
 }
 
 export default function ImageSlider(props: Props) {
   const [index, setIndex] = createSignal(0)
+  const size = () => props.size || "lg"
   
   // AI-generated photos first, then original
   const allPhotos = () => [...(props.photosGenerated || []), ...(props.photos || [])]
   
+  const currentPhoto = () => allPhotos()[index()]
+  const currentSrc = () => currentPhoto() ? getPhotoUrl(currentPhoto(), size()) : '/placeholder-dog.jpg'
+  const currentSrcSet = () => currentPhoto() ? getPhotoSrcSet(currentPhoto()) : ""
+
   const next = (e: Event) => {
     e.preventDefault()
     e.stopPropagation()
@@ -28,7 +35,9 @@ export default function ImageSlider(props: Props) {
   return (
     <div class={`relative group overflow-hidden ${props.class || ''}`}>
       <img 
-        src={allPhotos()[index()] || '/placeholder-dog.jpg'} 
+        src={currentSrc()}
+        srcset={currentSrcSet() || undefined}
+        sizes={currentSrcSet() ? "(max-width: 640px) 400px, 1200px" : undefined}
         alt={props.alt}
         class="nostalgia-img w-full h-full object-cover transition-opacity duration-300"
         loading="lazy"

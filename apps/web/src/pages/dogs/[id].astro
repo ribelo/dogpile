@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro'
 import Footer from '../../components/Footer.astro'
 import ImageSlider from '../../components/ImageSlider'
+import { getPhotoUrl } from '../../utils/photo-url'
 
 const { id } = Astro.params
 
@@ -13,9 +14,12 @@ if (!response.ok) {
 }
 
 const dog = await response.json()
+const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0]) 
+  ? getPhotoUrl(dog.photosGenerated?.[0] || dog.photos?.[0], 'lg') 
+  : undefined
 ---
 
-<Layout title={`${dog.name} - Dogpile`}>
+<Layout title={`${dog.name} - Dogpile`} image={ogImage}>
   <main class="grain-overlay min-h-screen pt-12 pb-24 px-6">
     <div class="max-w-4xl mx-auto">
       <a href="/" class="link-arrow mb-12">
