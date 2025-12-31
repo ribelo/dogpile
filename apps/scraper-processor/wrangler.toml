@@ -3,6 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+
 [[queues.consumers]]
 queue = "dogpile-scrape-jobs"
 max_batch_size = 1
