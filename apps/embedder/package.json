@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --remote --port 8788 --inspector-port 9231",
+    "dev": "wrangler dev --port 8788 --inspector-port 9231",
     "dev:local": "wrangler dev --port 8788",
     "build": "bun build src/index.ts --outdir dist --target browser --minify",
     "deploy": "wrangler deploy",

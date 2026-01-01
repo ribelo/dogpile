@@ -21,6 +21,7 @@ const listCommand = Command.make("list", {}, () => runScrapersCli(["list"]))
 const shelterIdArg = Args.text({ name: "shelter-id" })
 const limitOpt = Options.integer("limit").pipe(Options.optional)
 const concurrencyOpt = Options.integer("concurrency").pipe(Options.optional)
+const generatePhotosOpt = Options.boolean("generate-photos").pipe(Options.optional)
 
 const runCommand = Command.make("run", { shelterId: shelterIdArg, limit: limitOpt }, ({ shelterId, limit }) => {
   const args = ["run", shelterId]
@@ -33,10 +34,12 @@ const processCommand = Command.make("process", {
   shelterId: shelterIdArg, 
   limit: limitOpt,
   concurrency: concurrencyOpt,
-}, ({ shelterId, limit, concurrency }) => {
+  generatePhotos: generatePhotosOpt,
+}, ({ shelterId, limit, concurrency, generatePhotos }) => {
   const args = ["process", shelterId]
   if (Option.isSome(limit)) args.push("--limit", String(limit.value))
   if (Option.isSome(concurrency)) args.push("--concurrency", String(concurrency.value))
+  if (Option.isSome(generatePhotos) && generatePhotos.value) args.push("--generate-photos")
   return runScrapersCli(args)
 }
 )
