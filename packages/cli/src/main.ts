@@ -3,9 +3,10 @@ import { NodeContext } from "@effect/platform-node"
 import { Effect, Exit, Cause } from "effect"
 import { dbCommand } from "./commands/db.js"
 import { scrapeCommand } from "./commands/scrape.js"
+import { r2Command } from "./commands/r2.js"
 
 const cli = Command.make("dogpile").pipe(
-  Command.withSubcommands([dbCommand, scrapeCommand])
+  Command.withSubcommands([dbCommand, r2Command, scrapeCommand])
 )
 
 const run = Command.run(cli, {

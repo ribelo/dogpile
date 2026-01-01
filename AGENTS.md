@@ -2,6 +2,21 @@
 
 ## Project Structure
 
+## CRITICAL: Cloudflare Remote Bindings are BROKEN
+
+**NEVER use these - they fail silently on NixOS:**
+- `--remote` flag with wrangler commands
+- `remote = true` in wrangler.toml bindings
+
+Instead, use **local D1/R2 with sync commands**:
+
+| Command | Description |
+|---------|-------------|
+| `bun run cli db pull` | Remote D1 → Local SQLite |
+| `bun run cli db push` | Local SQLite → Remote D1 |
+| `bun run cli r2 pull` | Remote R2 → Local R2 |
+| `bun run cli r2 push` | Local R2 → Remote R2 |
+
 ## Unified CLI
 
 All project commands are available through a unified CLI:
