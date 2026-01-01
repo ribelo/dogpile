@@ -8,13 +8,14 @@ crons = ["0 * * * *"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "dogpile-db-preview"
-database_id = "ebaccb4b-50f9-4aa9-b155-577e319dbd15"
-preview_database_id = "ebaccb4b-50f9-4aa9-b155-577e319dbd15"
+database_name = "dogpile-db"
+database_id = "ea4a4ec7-ad28-4219-a86f-5054bc79b21c"
+remote = true
 
 [[queues.producers]]
 binding = "SCRAPE_QUEUE"
 queue = "dogpile-scrape-jobs"
+remote = true
 
 [vars]
 SYNC_INTERVAL_MINUTES = "60"

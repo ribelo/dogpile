@@ -1,0 +1,1 @@
+ALTER TABLE `dogs` DROP COLUMN `description`;

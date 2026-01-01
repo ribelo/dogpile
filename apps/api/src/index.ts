@@ -61,18 +61,23 @@ const routes: Route[] = [
       const offset = parseInt(url.searchParams.get("offset") ?? "0")
       const status = (url.searchParams.get("status") ?? "available") as any
 
-      const results = yield* Effect.promise(() =>
-        db
-          .select()
-          .from(dogs)
-          .where(eq(dogs.status, status))
-          .orderBy(desc(dogs.createdAt))
-          .limit(limit)
-          .offset(offset)
-          .all()
-      )
+      const results = yield* Effect.tryPromise({
+        try: () =>
+          db
+            .select()
+            .from(dogs)
+            .where(eq(dogs.status, status))
+            .orderBy(desc(dogs.createdAt))
+            .limit(limit)
+            .offset(offset)
+            .all(),
+        catch: (e) => {
+          console.error("D1 query error:", e)
+          throw e
+        }
+      })
 
-      return yield* json({ dogs: results, total: results.length })
+      return yield* json({ dogs: results ?? [], total: results?.length ?? 0 })
     }),
   },
   {

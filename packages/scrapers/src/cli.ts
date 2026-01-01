@@ -118,7 +118,7 @@ const formatDog = (dog: RawDogData, index: number): string => {
 
 const execSql = (sql: string) =>
   Effect.tryPromise({
-    try: () => $`bunx wrangler d1 execute dogpile-db-preview --remote --command ${sql}`.quiet().nothrow(),
+    try: () => $`wrangler d1 execute dogpile-db --local --config ../../apps/api/wrangler.toml --command ${sql}`.quiet().nothrow(),
     catch: (e) => new Error(`SQL failed: ${e}`)
   })
 
@@ -139,8 +139,8 @@ const uploadToR2WithOptimization = (base64Data: string, baseKey: string) =>
       writeFileSync(tmpLg, lgBuffer)
 
       await Promise.all([
-        $`bunx wrangler r2 object put dogpile-generated/${baseKey}-sm.webp --remote --file ${tmpSm}`.quiet(),
-        $`bunx wrangler r2 object put dogpile-generated/${baseKey}-lg.webp --remote --file ${tmpLg}`.quiet(),
+        $`wrangler r2 object put dogpile-generated/${baseKey}-sm.webp --remote --file ${tmpSm}`.quiet(),
+        $`wrangler r2 object put dogpile-generated/${baseKey}-lg.webp --remote --file ${tmpLg}`.quiet(),
       ])
 
       unlinkSync(tmpSm)
@@ -435,7 +435,7 @@ const regeneratePhotosCommand = () =>
     yield* Console.log("📡 Fetching dogs from DB...")
     const result = yield* Effect.tryPromise({
       try: async () => {
-        const proc = await $`bunx wrangler d1 execute dogpile-db-preview --remote --json --command "SELECT id, name, fingerprint, photos, generated_bio, photos_generated FROM dogs WHERE photos_generated = '[]' OR photos_generated IS NULL LIMIT ${limit}"`.quiet()
+        const proc = await $`wrangler d1 execute dogpile-db --local --config ../../apps/api/wrangler.toml --json --command "SELECT id, name, fingerprint, photos, generated_bio, photos_generated FROM dogs WHERE photos_generated = '[]' OR photos_generated IS NULL LIMIT ${limit}"`.quiet()
         return JSON.parse(proc.stdout.toString())
       },
       catch: (e) => new Error(`DB query failed: ${e}`)

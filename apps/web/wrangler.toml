@@ -11,6 +11,7 @@ assets = { directory = "dist", binding = "ASSETS" }
 binding = "SESSION"
 id = "53504d090fba4bdf8e2313da14b37720"
 preview_id = "53504d090fba4bdf8e2313da14b37720"
+remote = true
 
 [vars]
 API_URL = "https://dogpile-api.extropy.club"

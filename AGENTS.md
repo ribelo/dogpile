@@ -2,6 +2,43 @@
 
 ## Project Structure
 
+## Unified CLI
+
+All project commands are available through a unified CLI:
+
+```bash
+bun run cli --help
+```
+
+### Database Commands
+
+Local development uses **local SQLite** for D1. Sync with production:
+
+| Command | Description |
+|---------|-------------|
+| `bun run cli db pull` | Download all data from remote D1 → local SQLite |
+| `bun run cli db push` | Upload local data → remote D1 (upsert by fingerprint) |
+
+### Scraper Commands
+
+| Command | Description |
+|---------|-------------|
+| `bun run cli scrape list` | List all available scrapers |
+| `bun run cli scrape run <id>` | Fetch and display dogs (no AI, no save) |
+| `bun run cli scrape process <id>` | Full pipeline: scrape → AI → save to local D1 |
+
+Options for `scrape process`:
+- `--limit N` - Process only first N dogs
+- `--concurrency N` - Parallel AI requests (default: 10)
+
+**Workflow:**
+1. `bun run cli db pull` - Get latest production data
+2. `bun run dev` - Develop locally with local D1
+3. `bun run cli scrape process <shelter-id>` - Scrape and process dogs
+4. `bun run cli db push` - Push new dogs to production
+
+**Note:** `db:push` uses `ON CONFLICT(fingerprint)` upsert - it will update existing dogs and insert new ones. It does NOT delete dogs that aren't in local.
+
 ```
 dogpile/
 ├── apps/
@@ -27,6 +64,10 @@ dogpile/
 | `bun test` | Run tests |
 | `bun run db:generate` | Generate D1 migrations |
 | `bun run db:migrate` | Apply migrations |
+| `bun run cli db pull` | Sync remote D1 → local SQLite |
+| `bun run cli db push` | Sync local SQLite → remote D1 |
+| `bun run cli scrape list` | List scrapers |
+| `bun run cli scrape process <id>` | Scrape shelter |
 
 ## Coding Style
 
