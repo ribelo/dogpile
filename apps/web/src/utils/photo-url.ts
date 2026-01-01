@@ -1,5 +1,7 @@
 const R2_PHOTOS_DOMAIN = "https://dogpile.extropy.club"
-const R2_GENERATED_DOMAIN = "https://dogpile-generated.extropy.club"
+const R2_GENERATED_DOMAIN = import.meta.env.DEV 
+  ? "http://localhost:8787/photos/generated"
+  : "https://dogpile-generated.extropy.club"
 
 export type PhotoSize = "sm" | "lg"
 

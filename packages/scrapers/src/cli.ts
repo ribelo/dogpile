@@ -144,10 +144,17 @@ const uploadToR2WithOptimization = (base64Data: string, baseKey: string) =>
       writeFileSync(tmpSm, smBuffer)
       writeFileSync(tmpLg, lgBuffer)
 
-      await Promise.all([
-        $`wrangler r2 object put dogpile-generated/${baseKey}-sm.webp --remote --file ${tmpSm}`.quiet(),
-        $`wrangler r2 object put dogpile-generated/${baseKey}-lg.webp --remote --file ${tmpLg}`.quiet(),
-      ])
+      const smKey = `dogpile-generated/${baseKey}-sm.webp`
+      const lgKey = `dogpile-generated/${baseKey}-lg.webp`
+
+      const smResult = await $`wrangler r2 object put ${smKey} --file ${tmpSm} --config ../../apps/api/wrangler.toml`.nothrow()
+      if (smResult.exitCode !== 0) {
+        throw new Error(`R2 sm upload failed: ${smResult.stderr.toString()}`)
+      }
+      const lgResult = await $`wrangler r2 object put ${lgKey} --file ${tmpLg} --config ../../apps/api/wrangler.toml`.nothrow()
+      if (lgResult.exitCode !== 0) {
+        throw new Error(`R2 lg upload failed: ${lgResult.stderr.toString()}`)
+      }
 
       unlinkSync(tmpSm)
       unlinkSync(tmpLg)
