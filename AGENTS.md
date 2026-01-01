@@ -197,6 +197,7 @@ Before merging, verify:
 - Zero TypeScript errors
 - Negative test cases present
 - bd issues updated
+- All review findings fixed (P1-P99)
 
 ```bash
 bun run typecheck

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Effect, Console, Exit, Cause, Layer } from "effect"
+import { Effect, Console, Exit, Cause, Layer, Queue, Fiber, Chunk, Schedule } from "effect"
 import { FetchHttpClient } from "@effect/platform"
 import { getAdapter, listAdapters } from "./registry.js"
 import type { RawDogData } from "./adapter.js"
@@ -118,7 +118,13 @@ const formatDog = (dog: RawDogData, index: number): string => {
 
 const execSql = (sql: string) =>
   Effect.tryPromise({
-    try: () => $`wrangler d1 execute dogpile-db --local --config ../../apps/api/wrangler.toml --command ${sql}`.quiet().nothrow(),
+    try: async () => {
+      const result = await $`wrangler d1 execute dogpile-db --local --config ../../apps/api/wrangler.toml --command ${sql}`.quiet()
+      if (result.exitCode !== 0) {
+        throw new Error(`D1 execute failed: ${result.stderr.toString()}`)
+      }
+      return result
+    },
     catch: (e) => new Error(`SQL failed: ${e}`)
   })
 
@@ -222,9 +228,33 @@ const processCommand = (scraperId: string) =>
     yield* Console.log(`   Found ${rawDogs.length}, processing ${dogsToProcess.length}\n`)
 
     const esc = (s: string | null | undefined) => (s ?? "").replace(/'/g, "''")
+
+    // 1. Create queue for SQL operations
+    const sqlQueue = yield* Queue.bounded<string | null>(100)
+
+    // 2. Spawn writer fiber
+    const writerFiber = yield* Effect.gen(function* () {
+      while (true) {
+        const batch = yield* Queue.takeBetween(sqlQueue, 1, 10)
+        const activeItems = Chunk.filter(batch, (item): item is string => item !== null)
+        const shouldStop = batch.length !== activeItems.length
+
+        if (activeItems.length > 0) {
+          const combinedSql = Array.from(activeItems).join("; ")
+          yield* execSql(`BEGIN TRANSACTION; ${combinedSql}; COMMIT;`).pipe(
+            Effect.retry(Schedule.recurs(3).pipe(Schedule.addDelay(() => "500 millis"))),
+            Effect.catchAll(e => Console.error(`Batch write failed after retries: ${e}`))
+          )
+          yield* Console.log(`   💾 Saved batch of ${activeItems.length}`)
+        }
+
+        if (shouldStop) break
+      }
+    }).pipe(Effect.fork)
+
     // Step 2: Ensure shelter
     const shelterSql = `INSERT INTO shelters (id, slug, name, url, city, status) VALUES ('${esc(scraperId)}', '${esc(scraperId)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', 'active') ON CONFLICT(id) DO UPDATE SET name = excluded.name`
-    yield* execSql(shelterSql)
+    yield* sqlQueue.offer(shelterSql)
 
     // Get services
     const textExtractor = yield* TextExtractor
@@ -361,7 +391,7 @@ const processCommand = (scraperId: string) =>
         const sql = `
           INSERT INTO dogs (
             id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint,
-            status, urgent, created_at, updated_at, source_url,
+            status, urgent, created_at, updated_at, last_seen_at, source_url,
             breed_estimates, personality_tags, size_estimate, age_estimate, weight_estimate,
             location_city, is_foster, vaccinated, sterilized, chipped,
             good_with_kids, good_with_dogs, good_with_cats,
@@ -373,7 +403,7 @@ const processCommand = (scraperId: string) =>
             '${esc(dog.rawDescription)}',
             '${esc(JSON.stringify(dog.photos ?? []))}',
             '${esc(dog.fingerprint)}', 'available',
-            ${textResult?.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.sourceUrl)}',
+            ${textResult?.urgent ? 1 : 0}, ${now}, ${now}, ${now}, '${esc(adapter.sourceUrl)}',
             '${esc(breedEstimates)}', '${esc(personalityTags)}',
             '${esc(sizeEstimate)}', '${esc(ageEstimate)}', '${esc(weightEstimate)}',
             ${textResult?.locationHints?.cityMention ? `'${esc(textResult.locationHints.cityMention)}'` : `'${esc(adapter.city)}'`},
@@ -403,13 +433,7 @@ const processCommand = (scraperId: string) =>
             generated_bio = CASE WHEN excluded.generated_bio != '' THEN excluded.generated_bio ELSE dogs.generated_bio END,
             photos_generated = CASE WHEN excluded.photos_generated != '[]' THEN excluded.photos_generated ELSE dogs.photos_generated END
         `
-        yield* execSql(sql).pipe(
-          Effect.catchAll((e) => {
-            console.log(`   ⚠️ DB save failed: ${e}`)
-            return Effect.succeed(null)
-          })
-        )
-        yield* Console.log(`   💾 Saved`)
+        yield* sqlQueue.offer(sql)
       })
 
     yield* Effect.forEach(
@@ -417,6 +441,10 @@ const processCommand = (scraperId: string) =>
       (dog, i) => processDog(dog, i),
       { concurrency }
     )
+
+    // 4. Close queue and wait for writer
+    yield* sqlQueue.offer(null)
+    yield* Fiber.join(writerFiber)
 
     yield* Console.log(`\n\n✅ Complete! Processed ${dogsToProcess.length} dogs.`)
   })
@@ -451,7 +479,30 @@ const regeneratePhotosCommand = () =>
 
     const imageGen = yield* ImageGenerator
 
-    const processDbDog = (dog: { id: string; name: string; fingerprint: string; photos: string; generated_bio: string | null }, i: number) =>
+    // Create queue for SQL operations (single-writer pattern)
+    const sqlQueue = yield* Queue.bounded<string | null>(100)
+
+    // Spawn writer fiber
+    const writerFiber = yield* Effect.gen(function* () {
+      while (true) {
+        const batch = yield* Queue.takeBetween(sqlQueue, 1, 10)
+        const activeItems = Chunk.filter(batch, (item): item is string => item !== null)
+        const shouldStop = batch.length !== activeItems.length
+
+        if (activeItems.length > 0) {
+          const combinedSql = Array.from(activeItems).join("; ")
+          yield* execSql(`BEGIN TRANSACTION; ${combinedSql}; COMMIT;`).pipe(
+            Effect.retry(Schedule.recurs(3).pipe(Schedule.addDelay(() => "500 millis"))),
+            Effect.catchAll(e => Console.error(`Batch write failed after retries: ${e}`))
+          )
+          yield* Console.log(`   💾 Saved batch of ${activeItems.length}`)
+        }
+
+        if (shouldStop) break
+      }
+    }).pipe(Effect.fork)
+
+    const processDbDog = (dog: { id: string; name: string; fingerprint: string; photos: string; generated_bio: string | null }, i: number, queue: Queue.Queue<string | null>) =>
       Effect.gen(function* () {
         const photos = JSON.parse(dog.photos || "[]") as string[]
         const bio = dog.generated_bio || dog.name
@@ -508,22 +559,20 @@ const regeneratePhotosCommand = () =>
         if (generatedPhotoUrls.length > 0) {
           const photosGenerated = JSON.stringify(generatedPhotoUrls)
           const sql = `UPDATE dogs SET photos_generated = '${photosGenerated.replace(/'/g, "''")}' WHERE id = '${dog.id}'`
-          yield* execSql(sql).pipe(
-            Effect.catchAll((e) => {
-              console.log(`   ⚠️ DB update failed: ${e}`)
-              return Effect.succeed(null)
-            })
-          )
-          yield* Console.log(`   💾 Saved ${generatedPhotoUrls.length} photos`)
+          yield* queue.offer(sql)
         }
       })
 
     yield* Console.log("🤖 Generating photos...\n")
     yield* Effect.forEach(
       dogs,
-      (dog, i) => processDbDog(dog as { id: string; name: string; fingerprint: string; photos: string; generated_bio: string | null }, i),
+      (dog, i) => processDbDog(dog as { id: string; name: string; fingerprint: string; photos: string; generated_bio: string | null }, i, sqlQueue),
       { concurrency }
     )
+
+    // Close queue and wait for writer
+    yield* sqlQueue.offer(null)
+    yield* Fiber.join(writerFiber)
 
     yield* Console.log(`\n✅ Complete!`)
   })
