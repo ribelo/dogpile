@@ -24,6 +24,6 @@ export const aiConfig = Config.all({
     Config.withDefault("google/gemini-embedding-001")
   ),
   imageGenerationModel: Config.string("MODEL_IMAGE_GEN").pipe(
-    Config.withDefault("google/gemini-3-pro-image-preview")
+    Config.withDefault("bytedance-seed/seedream-4.5")
   ),
 })
