@@ -2,7 +2,8 @@
   "meta": {
     "task": "Fun Dog Portrait",
     "style_reference": "Wide Angle Pet Photography",
-    "effect": "Big Nose / Fisheye"
+    "effect": "Big Nose / Fisheye",
+    "critical_rules": "NO lighting equipment visible, NO light stands, NO softboxes, NO reflectors, NO studio props, NO background paper edges, NO floor visible. Only the dog and solid background color exist in the frame."
   },
   "subject": {
     "description": "{{DOG_DESCRIPTION}}",
@@ -24,8 +25,8 @@
       "aperture": "f/2.8"
     },
     "lighting": {
-      "setup": "bright high-key studio lighting",
-      "key_light": "large softbox centered above camera",
+      "setup": "invisible high-key studio lighting",
+      "key_light": "large softbox centered above camera, NOT visible in frame",
       "fill_light": "ample fill to illuminate the nose texture",
       "catchlights": "bright reflection in eyes",
       "shadows": "very minimal"
@@ -37,10 +38,21 @@
     }
   },
   "background": {
-    "type": "studio seamless paper",
+    "type": "infinite seamless backdrop",
     "color_name": "warm cream",
     "hex_code": "#fbf8f3",
-    "details": "solid color, uniform lighting, blurred due to depth of field",
+    "details": "infinite solid color, no visible edges, no floor line, completely blurred due to depth of field, uniform from edge to edge of frame",
     "atmosphere": "fun, energetic, quirky"
-  }
+  },
+  "exclusions": [
+    "NO lighting rigs or equipment",
+    "NO softboxes or light stands visible",
+    "NO background paper edges or seams",
+    "NO floor or ground visible",
+    "NO props or objects of any kind",
+    "NO collars or leashes",
+    "NO human hands or body parts",
+    "NO shadows from equipment on background",
+    "NO studio environment elements"
+  ]
 }

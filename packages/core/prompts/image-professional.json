@@ -1,7 +1,8 @@
 {
   "meta": {
     "task": "Professional Dog Portrait",
-    "style_reference": "Studio ID Photo"
+    "style_reference": "Studio ID Photo",
+    "critical_rules": "NO lighting equipment visible, NO light stands, NO softboxes, NO reflectors, NO studio props, NO background paper edges, NO floor visible, NO shadows from equipment. Only the dog and solid background color exist in the frame."
   },
   "subject": {
     "description": "{{DOG_DESCRIPTION}}",
@@ -21,8 +22,8 @@
       "aperture": "f/4.0"
     },
     "lighting": {
-      "setup": "three-point studio lighting",
-      "key_light": "large softbox from front-left",
+      "setup": "invisible three-point studio lighting",
+      "key_light": "large softbox from front-left, NOT visible in frame",
       "fill_light": "soft warm fill",
       "catchlights": "visible reflection in eyes",
       "shadows": "soft, minimal shadows under chin"
@@ -34,10 +35,21 @@
     }
   },
   "background": {
-    "type": "studio seamless paper",
+    "type": "infinite seamless backdrop",
     "color_name": "warm cream",
     "hex_code": "#fbf8f3",
-    "details": "solid color, uniform lighting, no patterns, no props, no horizon line",
+    "details": "infinite solid color, no visible edges, no floor line, no horizon, no shadows on background, no paper seams, no wrinkles, completely uniform from edge to edge of frame",
     "atmosphere": "warm, inviting, safe"
-  }
+  },
+  "exclusions": [
+    "NO lighting rigs or equipment",
+    "NO softboxes or light stands visible",
+    "NO background paper edges or seams",
+    "NO floor or ground visible",
+    "NO props or objects of any kind",
+    "NO collars or leashes",
+    "NO human hands or body parts",
+    "NO shadows from equipment on background",
+    "NO studio environment elements"
+  ]
 }

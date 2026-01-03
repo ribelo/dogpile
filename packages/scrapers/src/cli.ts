@@ -89,14 +89,14 @@ Commands:
   list                    List all available scrapers
   run <scraper-id>        Run scraper (dry-run by default)
   process <scraper-id>    Full pipeline: scrape + AI + save
-  regenerate-photos         Generate AI photos for dogs in DB without them
+  generate-missing         Generate AI photos for dogs in DB without them
 
 Options:
   --limit <n>             Limit dogs to process
   --json                  Output raw JSON
   --save                  Save to DB (for run command)
   --concurrency <n>       Parallel AI processing (1-60, default 10)
-  --generate-photos         Generate AI fisheye nose photos (expensive)
+  --generate-missing         Generate AI fisheye nose photos (expensive)
 
 Examples:
   bun run cli list
@@ -380,7 +380,7 @@ const processCommand = (scraperId: string) =>
 
         // Generate fisheye nose photo (optional, expensive)
         const generatedPhotoUrls: string[] = []
-        if (bio?.bio && getBoolFlag(parsed.flags, "generate-photos")) {
+        if (bio?.bio && getBoolFlag(parsed.flags, "generate-missing")) {
           yield* Console.log(`   🎨 Generating AI photos...`)
           const imgResult = yield* imageGenerator.generatePhotos({ dogDescription: bio.bio, referencePhotoUrl: dog.photos?.[0] }).pipe(
             Effect.catchAll((e) => {
@@ -500,7 +500,7 @@ const regeneratePhotosCommand = () =>
     const concurrency = Math.min(60, Math.max(1, getIntFlag(parsed.flags, "concurrency", 5)))
     const limit = getIntFlag(parsed.flags, "limit", 999)
     
-    yield* Console.log(`\n🎨 Regenerating photos for dogs without AI-generated photos`)
+    yield* Console.log(`\n🎨 Generating photos for dogs without AI-generated photos`)
     yield* Console.log(`   Concurrency: ${concurrency}\n`)
 
     // Fetch dogs from DB that need photos
@@ -657,7 +657,7 @@ const program = Effect.gen(function* () {
     yield* processCommand(scraperId)
     return
   }
-  if (command === "regenerate-photos") {
+  if (command === "generate-missing") {
     yield* regeneratePhotosCommand()
     return
   }
