@@ -140,7 +140,8 @@ const routes: Route[] = [
       }
       
       const headers = new Headers()
-      headers.set("Content-Type", object.httpMetadata?.contentType || "image/png")
+      const contentType = object.httpMetadata?.contentType || (key.endsWith(".webp") ? "image/webp" : "image/png")
+      headers.set("Content-Type", contentType)
       headers.set("Cache-Control", "public, max-age=31536000")
       headers.set("Access-Control-Allow-Origin", "*")
       

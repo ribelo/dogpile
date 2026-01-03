@@ -7,6 +7,7 @@ import { Database } from "bun:sqlite"
 import { globSync } from "glob"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { $ } from "bun"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, "../../../..")
@@ -127,6 +128,48 @@ const pushCommand = Command.make("push", {}, () =>
   })
 )
 
+const validateCommand = Command.make("validate", {}, () =>
+  Effect.gen(function* () {
+    yield* Console.log("Validating DB ↔ R2 photo consistency...")
+    
+    const dbPath = findLocalDb()
+    const db = new Database(dbPath)
+    
+    const dogs = db.query("SELECT fingerprint, photos_generated FROM dogs WHERE photos_generated != '[]' AND photos_generated IS NOT NULL").all() as { fingerprint: string; photos_generated: string }[]
+    db.close()
+    
+    yield* Console.log(`Found ${dogs.length} dogs with generated photos in DB`)
+    
+    let missingCount = 0
+    for (const dog of dogs) {
+      const photos = JSON.parse(dog.photos_generated) as string[]
+      for (const photo of photos) {
+        const baseKey = photo.replace(/^generated\//, "")
+        const r2Key = `dogpile-generated/${baseKey}-lg.webp`
+        
+        const exists = yield* Effect.tryPromise({
+          try: async () => {
+            const result = await $`wrangler r2 object get ${r2Key} --config ${CONFIG_PATH} --pipe`.quiet().nothrow()
+            return result.exitCode === 0
+          },
+          catch: () => false
+        }).pipe(Effect.catchAll(() => Effect.succeed(false)))
+        
+        if (!exists) {
+          yield* Console.log(`❌ Missing: ${r2Key} (dog: ${dog.fingerprint})`)
+          missingCount++
+        }
+      }
+    }
+    
+    if (missingCount === 0) {
+      yield* Console.log("✅ All photos in DB exist in R2")
+    } else {
+      yield* Console.log(`\n⚠️ Found ${missingCount} missing photos`)
+    }
+  })
+)
+
 export const dbCommand = Command.make("db", {}).pipe(
-  Command.withSubcommands([pullCommand, pushCommand])
+  Command.withSubcommands([pullCommand, pushCommand, validateCommand])
 )

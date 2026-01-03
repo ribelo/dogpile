@@ -10,8 +10,11 @@ import { join } from "node:path"
 import sharp from "sharp"
 
 
-const toPublicUrl = (key: string): string =>
-  `generated/${key}`
+// Photo key format: "generated/{fingerprint}-{type}" where type is "professional" or "nose"
+// R2 stores: "{fingerprint}-{type}-{size}.webp" where size is "sm" or "lg"
+// Frontend appends "-{size}.webp" when constructing URLs
+const toPhotoKey = (baseKey: string): string =>
+  `generated/${baseKey}`
 
 // Import core services
 import {
@@ -128,40 +131,63 @@ const execSql = (sql: string) =>
     catch: (e) => new Error(`SQL failed: ${e}`)
   })
 
-const uploadToR2WithOptimization = (base64Data: string, baseKey: string) =>
+
+const verifyR2ObjectExists = (baseKey: string): Effect.Effect<boolean, never, never> =>
   Effect.tryPromise({
     try: async () => {
-      const data = base64Data.replace(/^data:image\/\w+;base64,/, "")
-      const buffer = Buffer.from(data, "base64")
-
-      const [smBuffer, lgBuffer] = await Promise.all([
-        sharp(buffer).resize(400).webp({ quality: 80 }).toBuffer(),
-        sharp(buffer).resize(1200).webp({ quality: 85 }).toBuffer(),
-      ])
-
-      const tmpSm = join(tmpdir(), `dogpile-${Date.now()}-sm.webp`)
-      const tmpLg = join(tmpdir(), `dogpile-${Date.now()}-lg.webp`)
-      writeFileSync(tmpSm, smBuffer)
-      writeFileSync(tmpLg, lgBuffer)
-
-      const smKey = `dogpile-generated/${baseKey}-sm.webp`
       const lgKey = `dogpile-generated/${baseKey}-lg.webp`
-
-      const smResult = await $`wrangler r2 object put ${smKey} --file ${tmpSm} --config ../../apps/api/wrangler.toml`.nothrow()
-      if (smResult.exitCode !== 0) {
-        throw new Error(`R2 sm upload failed: ${smResult.stderr.toString()}`)
-      }
-      const lgResult = await $`wrangler r2 object put ${lgKey} --file ${tmpLg} --config ../../apps/api/wrangler.toml`.nothrow()
-      if (lgResult.exitCode !== 0) {
-        throw new Error(`R2 lg upload failed: ${lgResult.stderr.toString()}`)
-      }
-
-      unlinkSync(tmpSm)
-      unlinkSync(tmpLg)
-
-      return baseKey
+      const result = await $`wrangler r2 object get ${lgKey} --config ../../apps/api/wrangler.toml --pipe`.quiet().nothrow()
+      return result.exitCode === 0
     },
-    catch: (e) => new Error(`R2 upload failed: ${e}`)
+    catch: () => false
+  }).pipe(Effect.catchAll(() => Effect.succeed(false)))
+
+
+const uploadToR2WithOptimization = (base64Data: string, baseKey: string) =>
+  Effect.gen(function* () {
+    const uploaded = yield* Effect.tryPromise({
+      try: async () => {
+        const data = base64Data.replace(/^data:image\/\w+;base64,/, "")
+        const buffer = Buffer.from(data, "base64")
+
+        const [smBuffer, lgBuffer] = await Promise.all([
+          sharp(buffer).resize(400).webp({ quality: 80 }).toBuffer(),
+          sharp(buffer).resize(1200).webp({ quality: 85 }).toBuffer(),
+        ])
+
+        const tmpSm = join(tmpdir(), `dogpile-${Date.now()}-sm.webp`)
+        const tmpLg = join(tmpdir(), `dogpile-${Date.now()}-lg.webp`)
+        writeFileSync(tmpSm, smBuffer)
+        writeFileSync(tmpLg, lgBuffer)
+
+        const smKey = `dogpile-generated/${baseKey}-sm.webp`
+        const lgKey = `dogpile-generated/${baseKey}-lg.webp`
+
+        const smResult = await $`wrangler r2 object put ${smKey} --file ${tmpSm} --content-type image/webp --config ../../apps/api/wrangler.toml`.nothrow()
+        if (smResult.exitCode !== 0) {
+          throw new Error(`R2 sm upload failed: ${smResult.stderr.toString()}`)
+        }
+        const lgResult = await $`wrangler r2 object put ${lgKey} --file ${tmpLg} --content-type image/webp --config ../../apps/api/wrangler.toml`.nothrow()
+        if (lgResult.exitCode !== 0) {
+          throw new Error(`R2 lg upload failed: ${lgResult.stderr.toString()}`)
+        }
+
+        unlinkSync(tmpSm)
+        unlinkSync(tmpLg)
+
+        return baseKey
+      },
+      catch: (e) => new Error(`R2 upload failed: ${e}`)
+    })
+
+
+    // Verify upload succeeded by checking object exists
+    const exists = yield* verifyR2ObjectExists(uploaded)
+    if (!exists) {
+      return yield* Effect.fail(new Error(`R2 verification failed: object ${uploaded} not found after upload`))
+    }
+
+    return uploaded
   })
 
 const runCommand = (scraperId: string) =>
@@ -204,11 +230,13 @@ const runCommand = (scraperId: string) =>
           const sql = `INSERT INTO dogs (id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint, status, urgent, created_at, updated_at, source_url, breed_estimates, personality_tags) VALUES ('${crypto.randomUUID()}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}', '${esc(dog.sex ?? "unknown")}', '${esc(dog.rawDescription)}', '${esc(JSON.stringify(dog.photos ?? []))}', '${esc(dog.fingerprint)}', 'available', ${dog.urgent ? 1 : 0}, ${now}, ${now}, '${esc(adapter.sourceUrl)}', '[]', '[]') ON CONFLICT(fingerprint) DO UPDATE SET updated_at = ${now}`
           yield* execSql(sql)
         })
+
       )
       yield* Console.log(`   ✓ Saved ${rawDogs.length} dogs`)
     }
     yield* Console.log(`\n✅ Done.`)
   })
+
 
 const processCommand = (scraperId: string) =>
   Effect.gen(function* () {
@@ -287,6 +315,7 @@ const processCommand = (scraperId: string) =>
             console.log(`   ⚠️ Failed: ${e.message}`)
             return Effect.succeed(null)
           })
+
         )
         if (textResult) {
           yield* Console.log(`      ✓ Breeds: ${textResult.breedEstimates.map(b => b.breed).join(", ") || "none"}`)
@@ -301,6 +330,7 @@ const processCommand = (scraperId: string) =>
               console.log(`   ⚠️ Failed: ${e.message}`)
               return Effect.succeed(null)
             })
+
           )
           if (photoResult) {
             yield* Console.log(`      ✓ Colors: ${photoResult.colorPrimary ?? "?"}, fur: ${photoResult.furLength ?? "?"}`)
@@ -329,6 +359,7 @@ const processCommand = (scraperId: string) =>
             console.log(`   ⚠️ Failed: ${e.message}`)
             return Effect.succeed(null)
           })
+
         )
 
 
@@ -340,6 +371,7 @@ const processCommand = (scraperId: string) =>
               console.log(`   ⚠️ Embedding failed: ${e.message}`)
               return Effect.succeed(null)
             })
+
           )
           if (vector) {
             yield* Console.log(`      ✓ Vector dim: ${vector.length}`)
@@ -355,6 +387,7 @@ const processCommand = (scraperId: string) =>
               console.log(`   ⚠️ Image gen failed: ${e.message}`)
               return Effect.succeed(null)
             })
+
           )
           if (imgResult?.professional) {
             const r2Key = `${dog.fingerprint}-professional`
@@ -364,9 +397,10 @@ const processCommand = (scraperId: string) =>
                 console.log(`   ⚠️ R2 upload failed: ${e.message}`)
                 return Effect.succeed(null)
               })
+
             )
             if (uploadedKey) {
-              generatedPhotoUrls.push(toPublicUrl(uploadedKey))
+              generatedPhotoUrls.push(toPhotoKey(uploadedKey))
               yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
             }
           }
@@ -378,9 +412,10 @@ const processCommand = (scraperId: string) =>
                 console.log(`   ⚠️ R2 upload failed: ${e.message}`)
                 return Effect.succeed(null)
               })
+
             )
             if (uploadedKey) {
-              generatedPhotoUrls.push(toPublicUrl(uploadedKey))
+              generatedPhotoUrls.push(toPhotoKey(uploadedKey))
               yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
             }
           }
@@ -443,6 +478,7 @@ const processCommand = (scraperId: string) =>
         yield* sqlQueue.offer(sql)
       })
 
+
     yield* Effect.forEach(
       dogsToProcess,
       (dog, i) => processDog(dog, i),
@@ -455,6 +491,7 @@ const processCommand = (scraperId: string) =>
 
     yield* Console.log(`\n\n✅ Complete! Processed ${dogsToProcess.length} dogs.`)
   })
+
 
 
 // Regenerate photos for dogs in DB that don't have generated photos
@@ -475,6 +512,7 @@ const regeneratePhotosCommand = () =>
       },
       catch: (e) => new Error(`DB query failed: ${e}`)
     })
+
 
     const dogs = result[0]?.results ?? []
     yield* Console.log(`   Found ${dogs.length} dogs needing photos\n`)
@@ -530,6 +568,7 @@ const regeneratePhotosCommand = () =>
             console.log(`   ⚠️ Image gen failed: ${e.message}`)
             return Effect.succeed(null)
           })
+
         )
 
         const generatedPhotoUrls: string[] = []
@@ -541,9 +580,10 @@ const regeneratePhotosCommand = () =>
               console.log(`   ⚠️ R2 upload failed: ${e.message}`)
               return Effect.succeed(null)
             })
+
           )
           if (uploadedKey) {
-            generatedPhotoUrls.push(toPublicUrl(uploadedKey))
+            generatedPhotoUrls.push(toPhotoKey(uploadedKey))
             yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
           }
         }
@@ -556,9 +596,10 @@ const regeneratePhotosCommand = () =>
               console.log(`   ⚠️ R2 upload failed: ${e.message}`)
               return Effect.succeed(null)
             })
+
           )
           if (uploadedKey) {
-            generatedPhotoUrls.push(toPublicUrl(uploadedKey))
+            generatedPhotoUrls.push(toPhotoKey(uploadedKey))
             yield* Console.log(`      ✓ Uploaded: ${uploadedKey}`)
           }
         }
@@ -569,6 +610,7 @@ const regeneratePhotosCommand = () =>
           yield* queue.offer(sql)
         }
       })
+
 
     yield* Console.log("🤖 Generating photos...\n")
     yield* Effect.forEach(
@@ -583,6 +625,7 @@ const regeneratePhotosCommand = () =>
 
     yield* Console.log(`\n✅ Complete!`)
   })
+
 
 // Build layers
 const AILayer = Layer.mergeAll(
