@@ -60,9 +60,9 @@ export const lpgkLegnicaAdapter = createAdapter({
       const { document: listDoc } = parseHTML(html)
       const dogUrls = [
         ...new Set(
-          [...listDoc.querySelectorAll("article a[href]")]
+          [...listDoc.querySelectorAll("article .entry-title a")]
             .map((a) => a.getAttribute("href"))
-            .filter((href): href is string => !!href && href.startsWith("https://lpgk.eu/") && href.split("/").length >= 4),
+            .filter((href): href is string => !!href),
         ),
       ]
 
