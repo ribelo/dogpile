@@ -1,6 +1,7 @@
 import type { ShelterAdapter } from "./adapter.js"
 import { tozjaworAdapter } from "./adapters/tozjawor.js"
 import { lpgkLegnicaAdapter } from "./adapters/lpgk-legnica.js"
+import { schroniskoWroclawAdapter } from "./adapters/schronisko-wroclaw.js"
 
 const adapters = new Map<string, ShelterAdapter>()
 
@@ -10,6 +11,7 @@ export const registerAdapter = (adapter: ShelterAdapter): void => {
 
 registerAdapter(tozjaworAdapter)
 registerAdapter(lpgkLegnicaAdapter)
+registerAdapter(schroniskoWroclawAdapter)
 
 export const getAdapter = (id: string): ShelterAdapter | undefined => {
   return adapters.get(id)
