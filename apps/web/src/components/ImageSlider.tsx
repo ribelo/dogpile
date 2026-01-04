@@ -1,4 +1,4 @@
-import { createSignal, Show, For } from "solid-js"
+import { createSignal, Show, For, createEffect, onCleanup } from "solid-js"
 import { getPhotoUrl, getPhotoSrcSet } from "../utils/photo-url"
 
 interface Props {
@@ -7,10 +7,13 @@ interface Props {
   alt: string
   class?: string
   size?: "sm" | "lg"
+  autoplay?: boolean
+  interval?: number
 }
 
 export default function ImageSlider(props: Props) {
   const [index, setIndex] = createSignal(0)
+  const [isPaused, setIsPaused] = createSignal(false)
   const size = () => props.size || "lg"
   
   // AI-generated photos first, then original
@@ -19,6 +22,38 @@ export default function ImageSlider(props: Props) {
   const currentPhoto = () => allPhotos()[index()]
   const currentSrc = () => currentPhoto() ? getPhotoUrl(currentPhoto(), size()) : '/placeholder-dog.jpg'
   const currentSrcSet = () => currentPhoto() ? getPhotoSrcSet(currentPhoto()) : ""
+
+  createEffect(() => {
+    const photos = allPhotos()
+    const currentIdx = index()
+    const nextIdx = (currentIdx + 1) % photos.length
+
+    if (photos.length <= 1 || !photos[nextIdx]) return
+
+    // Prefetch next image
+    const nextSrc = getPhotoUrl(photos[nextIdx], size())
+    const link = document.createElement('link')
+    link.rel = 'prefetch'
+    link.as = 'image'
+    link.href = nextSrc
+    document.head.appendChild(link)
+
+    onCleanup(() => {
+      if (link.parentNode) {
+        link.parentNode.removeChild(link)
+      }
+    })
+  })
+
+  createEffect(() => {
+    if (!props.autoplay || isPaused() || allPhotos().length <= 1) return
+
+    const timer = setInterval(() => {
+      setIndex((i) => (i + 1) % allPhotos().length)
+    }, props.interval || 5000)
+
+    onCleanup(() => clearInterval(timer))
+  })
 
   const next = (e: Event) => {
     e.preventDefault()
@@ -33,7 +68,11 @@ export default function ImageSlider(props: Props) {
   }
 
   return (
-    <div class={`relative group overflow-hidden ${props.class || ''}`}>
+    <div 
+      class={`relative group overflow-hidden ${props.class || ''}`}
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
       <img 
         src={currentSrc()}
         srcset={currentSrcSet() || undefined}

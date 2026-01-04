@@ -63,5 +63,24 @@
   "meta": {
     "siteTitle": "Dogpile - Znajdź swojego psa",
     "siteDescription": "Psy z polskich schronisk w jednym miejscu. Znajdź swojego najlepszego przyjaciela."
+  },
+  "dogDetail": {
+    "backToList": "Wróć do listy",
+    "notAvailable": "Ten pies nie jest już dostępny do adopcji",
+    "notAvailableDesc": "Mógł zostać adoptowany lub przeniesiony do innego schroniska",
+    "age": "Wiek",
+    "years": "lat",
+    "size": "Rozmiar",
+    "breed": "Rasa",
+    "location": "Lokalizacja",
+    "goodWithKids": "Dobry z dziećmi",
+    "goodWithDogs": "Dobry z psami",
+    "goodWithCats": "Dobry z kotami",
+    "vaccinated": "Zaszczepiony",
+    "sterilized": "Wysterylizowany",
+    "chipped": "Zaczipowany",
+    "story": "Historia",
+    "contact": "Skontaktuj się ze schroniskiem",
+    "visitShelter": "Odwiedź stronę schroniska"
   }
 }

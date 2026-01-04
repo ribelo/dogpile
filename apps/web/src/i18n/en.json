@@ -63,5 +63,24 @@
   "meta": {
     "siteTitle": "Dogpile - Find your dog",
     "siteDescription": "Dogs from Polish shelters in one place. Find your best friend."
+  },
+  "dogDetail": {
+    "backToList": "Back to the pile",
+    "notAvailable": "This dog is no longer available for adoption",
+    "notAvailableDesc": "They may have been adopted or transferred to another shelter",
+    "age": "Age",
+    "years": "years",
+    "size": "Size",
+    "breed": "Breed",
+    "location": "Location",
+    "goodWithKids": "Good with kids",
+    "goodWithDogs": "Good with dogs",
+    "goodWithCats": "Good with cats",
+    "vaccinated": "Vaccinated",
+    "sterilized": "Sterilized",
+    "chipped": "Chipped",
+    "story": "Story",
+    "contact": "Say hello to",
+    "visitShelter": "Visit shelter website"
   }
 }

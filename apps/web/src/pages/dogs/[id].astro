@@ -43,12 +43,12 @@ const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0])
               <ImageSlider 
                 client:load
                 photos={dog.photos || []} 
-                photosGenerated={dog.photosGenerated || []} 
-                alt={dog.name}
-                class="w-full aspect-[4/3] rounded-sm"
-              />
-            </div>
+              photosGenerated={dog.photosGenerated || []} 
+              alt={dog.name}
+              class="w-full aspect-[4/5] rounded-sm"
+            />
           </div>
+        </div>
 
           <!-- Content -->
           <div class="lg:col-span-5 space-y-8">
