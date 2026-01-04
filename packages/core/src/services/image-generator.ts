@@ -2,9 +2,41 @@ import { Context, Effect, Layer } from "effect"
 import { OpenRouterClient } from "./openrouter/client.js"
 import { aiConfig } from "../config/ai.js"
 import type { ChatMessage, ChatCompletionsResult } from "./openrouter/types.js"
-import professionalPromptTemplate from "../../prompts/image-professional.json"
-import funNosePromptTemplate from "../../prompts/image-fun-nose.json"
 import { OpenRouterError, RateLimitError, NetworkError } from "./openrouter/errors.js"
+
+interface PromptTemplate {
+  readonly meta: {
+    readonly task: string
+    readonly style_reference: string
+    readonly short_description: string
+  }
+  readonly subject: {
+    readonly dog_description: string
+    readonly positioning: {
+      readonly framing: string
+      readonly body_visible: string
+      readonly alignment: string
+      readonly eye_contact: string
+    }
+    readonly expression: string
+    readonly focus: string
+  }
+  readonly photography: {
+    readonly camera_gear: Record<string, string>
+    readonly lighting: Record<string, string>
+    readonly texture: Record<string, string>
+  }
+  readonly background: {
+    readonly type: string
+    readonly color_name: string
+    readonly hex_code: string
+    readonly details: string
+    readonly atmosphere: string
+  }
+}
+
+const professionalPromptTemplate: PromptTemplate = await import("../../prompts/image-professional.json")
+const funNosePromptTemplate: PromptTemplate = await import("../../prompts/image-fun-nose.json")
 
 export interface GeneratedPhoto {
   readonly base64Url: string
@@ -17,7 +49,7 @@ export interface ImageGeneratorOutput {
 
 export interface GeneratePhotosInput {
   readonly dogDescription: string
-  readonly referencePhotoUrl?: string
+  readonly referencePhotoUrl?: string | undefined
 }
 
 export interface ImageGenerator {
@@ -30,7 +62,7 @@ export const ImageGenerator = Context.GenericTag<ImageGenerator>(
   "@dogpile/ImageGenerator"
 )
 
-const buildPrompt = (template: typeof professionalPromptTemplate, dogDescription: string): string => {
+const buildPrompt = (template: PromptTemplate, dogDescription: string): string => {
   const prompt = JSON.parse(JSON.stringify(template))
   prompt.subject.dog_description = dogDescription
   return JSON.stringify(prompt)
