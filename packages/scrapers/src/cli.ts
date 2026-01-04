@@ -121,6 +121,7 @@ Options:
   --json                  Output raw JSON
   --save                  Save to DB (for run command)
   --concurrency <n>       Parallel processing (default 10)
+  --skip-photos           Skip AI photo generation
   --force                   Bypass safety checks or overwrite
   --missing-only            For generate: only dogs without photos (default true)
   --id <id>                 Process specific dog ID
@@ -420,7 +421,7 @@ const processCommand = (scraperId: string) =>
 
         // Generate fisheye nose photo (optional, expensive)
         const generatedPhotoUrls: string[] = []
-        if (bio?.bio && getBoolFlag(parsed.flags, "generate-missing")) {
+        if (bio?.bio && !getBoolFlag(parsed.flags, "skip-photos")) {
           yield* Console.log(`   🎨 Generating AI photos...`)
           const imgResult = yield* imageGenerator.generatePhotos({ dogDescription: bio.bio, referencePhotoUrl: dog.photos?.[0] }).pipe(
             Effect.catchAll((e) => {
