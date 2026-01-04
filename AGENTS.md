@@ -113,6 +113,18 @@ const name = document.querySelector("h1")?.textContent?.trim() ?? "Unknown"
 const photos = [...document.querySelectorAll(".gallery img")].map(img => img.getAttribute("src"))
 ```
 
+## Scraper Requirements
+
+When building shelter scrapers:
+
+1. **Individual dog URLs are mandatory.** Each dog's `sourceUrl` must point to its dedicated detail page (e.g., `https://shelter.pl/dogs/rex-123/`), not the listing page. This URL is shown to users so they can visit the shelter's page for that specific dog.
+
+2. **Extract data from detail pages.** Scrape each dog's individual page to get complete information (name, photos, description), not just the listing preview.
+
+3. **Use linkedom for HTML parsing.** Never use regex to parse HTML (see above).
+
+4. **Filter URLs carefully.** Only extract links to actual dog pages, not author pages, category pages, or other navigation links.
+
 <!-- effect-solutions:start -->
 ## Effect Best Practices
 
