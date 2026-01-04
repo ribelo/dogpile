@@ -11,6 +11,9 @@ import {
   ImageGenerator,
   ImageGeneratorLive,
   OpenRouterClientLive,
+  RateLimitError,
+  NetworkError,
+  OpenRouterError,
 } from "@dogpile/core/services"
 import { aiConfig, type AIConfig } from "@dogpile/core/config/ai"
 import { FetchHttpClient } from "@effect/platform"
@@ -18,6 +21,24 @@ import { FetchHttpClient } from "@effect/platform"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, "../../../..")
 const CONFIG_PATH = path.join(REPO_ROOT, "apps/api/wrangler.toml")
+
+const isRetryableError = (error: unknown): boolean => {
+  if (error instanceof RateLimitError) return true
+  if (error instanceof NetworkError) return true
+  if (error instanceof OpenRouterError) {
+    const retryableCodes = [408, 429, 500, 502, 503]
+    return retryableCodes.includes(error.status)
+  }
+  return false
+}
+
+const isUnrecoverableError = (error: unknown): { stop: boolean; reason: string } | null => {
+  if (error instanceof OpenRouterError) {
+    if (error.status === 402) return { stop: true, reason: "Insufficient credits on OpenRouter" }
+    if (error.status === 401) return { stop: true, reason: "Invalid API credentials" }
+  }
+  return null
+}
 
 const findLocalDb = (): string => {
   const pattern = path.join(REPO_ROOT, "apps/api/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite")
@@ -161,6 +182,11 @@ const generateCommand = Command.make("generate", {
 
     yield* Console.log(`Generating photos for ${dogs.length} dogs (concurrency: ${concurrency})...`)
 
+    const retrySchedule = Schedule.exponential("1 second").pipe(
+      Schedule.union(Schedule.spaced("500 millis")),
+      Schedule.intersect(Schedule.recurs(3)) // max 3 retries
+    )
+
     const imageGenerator = yield* ImageGenerator
 
     const processDog = (dog: typeof dogs[0], index: number) =>
@@ -173,20 +199,34 @@ const generateCommand = Command.make("generate", {
           return
         }
 
-        const result = yield* imageGenerator.generatePhotos({
-          dogDescription: dog.generated_bio,
-          referencePhotoUrl: photos[0],
-        }).pipe(
-          Effect.catchAll(e => {
-            return Console.log(`  ❌ Failed image generation for ${dog.name}: ${e.message}`).pipe(
-              Effect.map(() => null)
-            )
+        const result = yield* imageGenerator
+          .generatePhotos({
+            dogDescription: dog.generated_bio,
+            referencePhotoUrl: photos[0],
           })
-        )
+          .pipe(
+            Effect.retry({
+              schedule: retrySchedule,
+              while: (error) => isRetryableError(error),
+            }),
+            Effect.catchAll((e) => {
+              const unrecoverable = isUnrecoverableError(e)
+              if (unrecoverable) {
+                // This will bubble up and stop the whole process
+                return Effect.fail(new Error(unrecoverable.reason))
+              }
+              return Console.log(`  ❌ Failed image generation for ${dog.name}: ${e.message}`).pipe(
+                Effect.map(() => null)
+              )
+           })
+         )
 
-        if (!result) return
+        if (!result) {
+          yield* Console.log(`  ⚠️ No photos generated for ${dog.name} (model returned empty)`)
+          return
+        }
 
-        const generatedKeys: string[] = []
+       const generatedKeys: string[] = []
 
         if (result.professional) {
           const key = yield* uploadToR2(sharp, result.professional.base64Url, dog.fingerprint, "professional").pipe(
