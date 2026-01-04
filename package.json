@@ -18,9 +18,11 @@
     "db:migrate": "bun run --filter @dogpile/db migrate",
     "cli": "bun run --filter @dogpile/cli start",
     "db:pull": "bun run cli db pull",
-    "db:push": "bun run cli db push"
+    "db:push": "bun run cli db push",
+    "prepare": "effect-language-service patch"
   },
   "devDependencies": {
+    "@effect/language-service": "^0.64.0",
     "@types/bun": "^1.2.14",
     "typescript": "^5.8.3"
   },

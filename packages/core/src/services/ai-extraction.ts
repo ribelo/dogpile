@@ -51,7 +51,7 @@ export class ExtractionError extends Error {
   readonly _tag = "ExtractionError"
   constructor(
     readonly source: "text" | "photo",
-    readonly cause: unknown,
+    override readonly cause: unknown,
     message: string
   ) {
     super(message)

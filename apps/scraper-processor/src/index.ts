@@ -34,7 +34,7 @@ interface ScrapeJob {
 interface ReindexJob {
   type: "upsert" | "delete"
   dogId: string
-  description?: string
+  description?: string | undefined
 }
 
 export default {
