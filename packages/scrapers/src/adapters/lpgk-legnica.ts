@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import { HttpClient } from "@effect/platform"
+import { parseHTML } from "linkedom"
 import { createAdapter, type RawDogData } from "../adapter.js"
 import { ScrapeError, ParseError } from "@dogpile/core"
 
@@ -31,11 +32,16 @@ export const lpgkLegnicaAdapter = createAdapter({
           }))
         )
 
-      const firstPage = yield* fetchPage(SOURCE_URL)
-      const pages = [firstPage]
-      
-      const pageLinks = [...firstPage.matchAll(/href="(https:\/\/lpgk\.eu\/category\/psy-do-adopcji\/page\/(\d+)\/)"/g)]
-      const maxPage = Math.max(...pageLinks.map(m => parseInt(m[2])), 1)
+      const firstPageHtml = yield* fetchPage(SOURCE_URL)
+      const pages = [firstPageHtml]
+
+      const { document: firstDoc } = parseHTML(firstPageHtml)
+      const pageLinks = [...firstDoc.querySelectorAll('a[href*="/category/psy-do-adopcji/page/"]')]
+      const maxPage = pageLinks.reduce((max, a) => {
+        const href = a.getAttribute("href")
+        const match = href?.match(/\/page\/(\d+)\//)
+        return match ? Math.max(max, parseInt(match[1])) : max
+      }, 1)
 
       if (maxPage > 1) {
         const remainingPages = yield* Effect.all(
@@ -51,33 +57,45 @@ export const lpgkLegnicaAdapter = createAdapter({
   parse: (html, config) =>
     Effect.gen(function* () {
       const client = yield* HttpClient.HttpClient
-      const dogUrls = [...new Set([...html.matchAll(/<article[^>]*>[\s\S]*?<a[^>]+href="(https:\/\/lpgk\.eu\/[^"\/]+\/)"/g)].map(m => m[1]))]
-      
+      const { document: listDoc } = parseHTML(html)
+      const dogUrls = [
+        ...new Set(
+          [...listDoc.querySelectorAll("article a[href]")]
+            .map((a) => a.getAttribute("href"))
+            .filter((href): href is string => !!href && href.startsWith("https://lpgk.eu/") && href.split("/").length >= 4),
+        ),
+      ]
+
       const dogs = yield* Effect.all(
         dogUrls.map((url) =>
           Effect.gen(function* () {
-            const res = yield* client.get(url).pipe(Effect.flatMap(r => r.text), Effect.scoped)
-            
-            const postIdMatch = res.match(/postid-(\d+)/) || res.match(/id="post-(\d+)"/)
-            const externalId = postIdMatch ? postIdMatch[1] : url.split("/").filter(Boolean).pop()!
-            
-            const nameMatch = res.match(/<title>([^|]+)\| LPGK<\/title>/) || res.match(/<h1[^>]*>([^<]+)<\/h1>/)
-            const name = (nameMatch ? nameMatch[1] : "Unknown").trim()
+            const res = yield* client.get(url).pipe(Effect.flatMap((r) => r.text), Effect.scoped)
+            const { document: dogDoc } = parseHTML(res)
 
-            const descriptionMatches = [...res.matchAll(/<div dir="auto"[^>]*>([^<]+(?:<[^>]+>[^<]*)*)<\/div>/g)]
-            const rawDescription = descriptionMatches
-              .map(m => m[1].replace(/<[^>]*>/g, "").replace(/&#8230;/g, "...").trim())
-              .filter(s => s.length > 20)
+            const bodyClass = dogDoc.body.getAttribute("class") ?? ""
+            const postIdMatch = bodyClass.match(/postid-(\d+)/) || dogDoc.querySelector('[id^="post-"]')?.id.match(/post-(\d+)/)
+            const externalId = postIdMatch ? postIdMatch[1] : url.split("/").filter(Boolean).pop()!
+
+            const title = dogDoc.querySelector("title")?.textContent ?? ""
+            const nameFromTitle = title.includes("|") ? title.split("|")[0].trim() : null
+            const name = (nameFromTitle || dogDoc.querySelector("h1")?.textContent || "Unknown").trim()
+
+            const rawDescription = [...dogDoc.querySelectorAll('div[dir="auto"]')]
+              .map((div) => div.textContent?.replace(/&#8230;/g, "...").trim() ?? "")
+              .filter((s) => s.length > 20)
               .join("\n")
 
             const photos: string[] = []
-            const mainPhotoMatch = res.match(/<div class="et_pb_title_featured_container">[\s\S]*?<img[^>]+src="([^"]+)"/)
-            if (mainPhotoMatch) photos.push(cleanImageUrl(mainPhotoMatch[1]))
+            const mainPhoto = dogDoc.querySelector(".et_pb_title_featured_container img")?.getAttribute("src")
+            if (mainPhoto) photos.push(cleanImageUrl(mainPhoto))
 
-            const galleryMatches = res.matchAll(/<a[^>]+href="(https:\/\/lpgk\.eu\/wp-content\/uploads\/[^"]+\.(?:jpg|jpeg|png))"/g)
-            for (const match of galleryMatches) {
-              const photoUrl = cleanImageUrl(match[1])
-              if (!photos.includes(photoUrl)) photos.push(photoUrl)
+            const galleryLinks = [...dogDoc.querySelectorAll('a[href*="/wp-content/uploads/"]')]
+            for (const a of galleryLinks) {
+              const href = a.getAttribute("href")
+              if (href && /\.(?:jpg|jpeg|png)$/i.test(href)) {
+                const photoUrl = cleanImageUrl(href)
+                if (!photos.includes(photoUrl)) photos.push(photoUrl)
+              }
             }
 
             return {
@@ -89,20 +107,21 @@ export const lpgkLegnicaAdapter = createAdapter({
               sex: "unknown" as const,
               sourceUrl: url,
             } satisfies RawDogData
-          }).pipe(
-            Effect.catchAll(() => Effect.succeed(null))
-          )
+          }).pipe(Effect.catchAll(() => Effect.succeed(null))),
         ),
-        { concurrency: 5 }
+        { concurrency: 5 },
       )
 
       return dogs.filter((d) => d !== null) as RawDogData[]
     }).pipe(
-      Effect.mapError((cause) => new ParseError({
-        shelterId: config.shelterId,
-        cause,
-        message: "Failed to parse LPGK Legnica pages",
-      }))
+      Effect.mapError(
+        (cause) =>
+          new ParseError({
+            shelterId: config.shelterId,
+            cause,
+            message: "Failed to parse LPGK Legnica pages",
+          }),
+      ),
     ),
 
   transform: (raw, config) =>

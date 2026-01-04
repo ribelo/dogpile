@@ -95,6 +95,24 @@ dogpile/
 - **Formatting**: 2-space indent, no semicolons (follow existing code)
 - **Naming**: camelCase for variables/functions, PascalCase for types/components
 
+## CRITICAL: HTML Parsing Rules
+
+**NEVER use regex to parse HTML.** This is strictly prohibited.
+
+- Use `linkedom` for all HTML parsing in scrapers
+- Import: `import { parseHTML } from "linkedom"`
+- Parse: `const { document } = parseHTML(html)`
+- Then use standard DOM APIs: `querySelector`, `querySelectorAll`, `textContent`, etc.
+
+Example:
+```typescript
+import { parseHTML } from "linkedom"
+
+const { document } = parseHTML(html)
+const name = document.querySelector("h1")?.textContent?.trim() ?? "Unknown"
+const photos = [...document.querySelectorAll(".gallery img")].map(img => img.getAttribute("src"))
+```
+
 <!-- effect-solutions:start -->
 ## Effect Best Practices
 

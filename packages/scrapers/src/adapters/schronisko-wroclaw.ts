@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import { HttpClient } from "@effect/platform"
+import { parseHTML } from "linkedom"
 import { createAdapter, type RawDogData } from "../adapter.js"
 import { ScrapeError, ParseError } from "@dogpile/core"
 
@@ -31,11 +32,14 @@ export const schroniskoWroclawAdapter = createAdapter({
 
       const firstPage = yield* fetchPage(SOURCE_URL)
       const pages = [firstPage]
-      
-      const pageMatches = [...firstPage.matchAll(/\/gatunek-zwierzecia\/psy\/page\/(\d+)\//g)]
-      const maxPage = pageMatches.length > 0 
-        ? Math.max(...pageMatches.map(m => parseInt(m[1])))
-        : 1
+
+      const { document: firstDoc } = parseHTML(firstPage)
+      const pageLinks = [...firstDoc.querySelectorAll('a[href*="/gatunek-zwierzecia/psy/page/"]')]
+      const maxPage = pageLinks.reduce((max, a) => {
+        const href = a.getAttribute("href")
+        const match = href?.match(/\/page\/(\d+)\//)
+        return match ? Math.max(max, parseInt(match[1])) : max
+      }, 1)
 
       if (maxPage > 1) {
         const remainingPages = yield* Effect.all(
@@ -51,31 +55,47 @@ export const schroniskoWroclawAdapter = createAdapter({
   parse: (html, config) =>
     Effect.gen(function* () {
       const client = yield* HttpClient.HttpClient
-      const dogUrls = [...new Set([...html.matchAll(/href="(https:\/\/schroniskowroclaw\.pl\/zwierzeta\/([^"\/]+)\/)"/g)].map(m => m[1]))]
-      
+      const { document: listDoc } = parseHTML(html)
+      const dogUrls = [
+        ...new Set(
+          [...listDoc.querySelectorAll('a[href*="/zwierzeta/"]')]
+            .map((a) => a.getAttribute("href"))
+            .filter((href): href is string => href?.startsWith(BASE_URL + "/zwierzeta/") ?? false),
+        ),
+      ]
+
       const dogs = yield* Effect.all(
         dogUrls.map((url) =>
           Effect.gen(function* () {
             const res = yield* client.get(url).pipe(Effect.flatMap(r => r.text), Effect.scoped)
-            
+            const { document: dogDoc } = parseHTML(res)
+
             const slugMatch = url.match(/\/zwierzeta\/([^"\/]+)\//)
             const externalId = slugMatch ? slugMatch[1] : url.split("/").filter(Boolean).pop()!
-            
-            const nameMatch = res.match(/<h1 class="[^"]*bde-heading-979-185[^"]*">([^<]+)<\/h1>/) || res.match(/<h1[^>]*>([^<]+)<\/h1>/)
-            const name = (nameMatch ? nameMatch[1] : "Unknown").trim()
 
-            const descriptionParagraphs = [...res.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/g)]
-            const rawDescription = descriptionParagraphs
-              .map(m => m[1].replace(/<[^>]*>/g, "").trim())
-              .filter(s => s.length > 20 && !s.toLowerCase().includes("ciastecz") && !s.toLowerCase().includes("cookie"))
+            const name = (
+              dogDoc.querySelector("h1.bde-heading-979-185")?.textContent ??
+              dogDoc.querySelector("h1")?.textContent ??
+              "Unknown"
+            ).trim()
+
+            const rawDescription = [...dogDoc.querySelectorAll("p")]
+              .map((p) => p.textContent?.trim() ?? "")
+              .filter(
+                (s) =>
+                  s.length > 20 &&
+                  !s.toLowerCase().includes("ciastecz") &&
+                  !s.toLowerCase().includes("cookie"),
+              )
               .join("\n")
 
-            const photos: string[] = []
-            const galleryMatches = res.matchAll(/<a[^>]+class="ee-gallery-item"[^>]+href="([^"]+)"/g)
-            for (const match of galleryMatches) {
-              const photoUrl = match[1]
-              if (!photos.includes(photoUrl)) photos.push(photoUrl)
-            }
+            const photos = [
+              ...new Set(
+                [...dogDoc.querySelectorAll("a.ee-gallery-item")]
+                  .map((a) => a.getAttribute("href"))
+                  .filter((href): href is string => !!href),
+              ),
+            ]
 
             return {
               fingerprint: `${SHELTER_ID}:${externalId}`,
