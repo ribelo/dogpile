@@ -10,3 +10,6 @@ dist/
 *.tsbuildinfo
 *.pid
 .r2-cache/
+
+# Effect source reference (cloned repo)
+third-party/effect/
