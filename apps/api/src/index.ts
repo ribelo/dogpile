@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { drizzle } from "drizzle-orm/d1"
-import { dogs, shelters } from "@dogpile/db"
-import { eq, desc, and, like, sql } from "drizzle-orm"
+import { dogs, shelters, syncLogs } from "@dogpile/db"
+import { eq, desc, and, like, sql, SQL } from "drizzle-orm"
 import { DatabaseError, R2Error, QueueError } from "./errors"
 
 interface Env {
@@ -60,16 +60,38 @@ const routes: Route[] = [
     handler: Effect.fn("api.listDogs")(function* (req, env) {
       const url = new URL(req.url)
       const db = drizzle(env.DB)
-      const limit = parseInt(url.searchParams.get("limit") ?? "20")
-      const offset = parseInt(url.searchParams.get("offset") ?? "0")
-      const status = (url.searchParams.get("status") ?? "available") as any
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "20") || 20, 1), 100)
+      const offset = Math.max(parseInt(url.searchParams.get("offset") ?? "0") || 0, 0)
+      const validStatuses = ["available", "adopted", "removed", "reserved"]
+      const statusParam = url.searchParams.get("status")
+      const city = url.searchParams.get("city")
+      const sex = url.searchParams.get("sex")
+      const size = url.searchParams.get("size")
+
+      const filters: SQL[] = []
+
+      type DogStatus = "available" | "adopted" | "removed" | "reserved"
+      if (statusParam !== "all") {
+        const status = validStatuses.includes(statusParam ?? "") ? statusParam : "available"
+        filters.push(eq(dogs.status, status as DogStatus))
+      }
+
+      if (city) {
+        filters.push(sql`lower(${dogs.locationCity}) = lower(${city})`)
+      }
+      if (sex && ["male", "female", "unknown"].includes(sex)) {
+        filters.push(eq(dogs.sex, sex as any))
+      }
+      if (size) {
+        filters.push(sql`lower(json_extract(${dogs.sizeEstimate}, '$.value')) = lower(${size})`)
+      }
 
       const results = yield* Effect.tryPromise({
         try: () =>
           db
             .select()
             .from(dogs)
-            .where(eq(dogs.status, status))
+            .where(filters.length > 0 ? and(...filters) : undefined)
             .orderBy(desc(dogs.createdAt))
             .limit(limit)
             .offset(offset)
@@ -92,7 +114,10 @@ const routes: Route[] = [
       if (!result) {
         return yield* json({ error: "Dog not found" }, 404)
       }
-      return yield* json(result)
+      return yield* json({
+        ...result,
+        isRemoved: result.status === "removed"
+      })
     }),
   },
   {
@@ -117,15 +142,24 @@ const routes: Route[] = [
         return yield* json({ error: "Missing q parameter" }, 400)
       }
 
+      const statusParam = url.searchParams.get("status")
+      const validStatuses = ["available", "adopted", "removed", "reserved"]
+      const statusFilter = statusParam === "all" ? undefined : 
+        (validStatuses.includes(statusParam ?? "") ? statusParam : "available")
+
       const db = drizzle(env.DB)
-      // For now, just return text search results
-      // TODO: Integrate with Vectorize when EmbeddingService is wired
+      
+      const filters: SQL[] = [like(dogs.generatedBio, `%${query}%`)]
+      if (statusFilter) {
+        filters.push(eq(dogs.status, statusFilter as any))
+      }
+
       const results = yield* Effect.tryPromise({
         try: () =>
           db
             .select()
             .from(dogs)
-            .where(like(dogs.generatedBio, `%${query}%`))
+            .where(and(...filters))
             .limit(10)
             .all(),
         catch: (e) => new DatabaseError({ operation: "searchDogs", cause: e })
@@ -200,53 +234,90 @@ const routes: Route[] = [
     }),
   },
   {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/admin/backfill-images" }),
-    handler: Effect.fn("api.adminBackfillImages")(function* (req, env) {
-      const auth = req.headers.get("Authorization")
-      if (!env.ADMIN_KEY || auth !== `Bearer ${env.ADMIN_KEY}`) {
+   method: "POST",
+   pattern: new URLPattern({ pathname: "/admin/backfill-images" }),
+   handler: Effect.fn("api.adminBackfillImages")(function* (req, env) {
+     const auth = req.headers.get("Authorization")
+     if (!env.ADMIN_KEY || auth !== `Bearer ${env.ADMIN_KEY}`) {
+       return yield* json({ error: "Unauthorized" }, 401)
+     }
+
+     if (!env.IMAGE_QUEUE) {
+       return yield* json({ error: "IMAGE_QUEUE not configured" }, 500)
+     }
+
+     const db = drizzle(env.DB)
+     
+     const allDogs = yield* Effect.tryPromise({
+       try: () =>
+         db.select({ id: dogs.id, photos: dogs.photos })
+           .from(dogs)
+           .where(eq(dogs.status, "available"))
+           .all(),
+       catch: (e) => new DatabaseError({ operation: "backfillListDogs", cause: e })
+     })
+
+     const jobs: { body: { dogId: string; urls: string[] } }[] = []
+
+     for (const dog of allDogs) {
+       const externalUrls = (dog.photos || []).filter((p: string) => p.startsWith("http"))
+       if (externalUrls.length > 0) {
+         jobs.push({ body: { dogId: dog.id, urls: externalUrls } })
+       }
+     }
+
+     if (jobs.length > 0) {
+       const batchSize = 100
+       for (let i = 0; i < jobs.length; i += batchSize) {
+         const chunk = jobs.slice(i, i + batchSize)
+         yield* Effect.tryPromise({
+           try: () => env.IMAGE_QUEUE!.sendBatch(chunk),
+           catch: (e) => new QueueError({ operation: "sendBatch", cause: e })
+         })
+       }
+     }
+
+     return yield* json({
+       status: "ok",
+       scanned: allDogs.length,
+       enqueued: jobs.length
+     })
+   }),
+ },
+  {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/admin/sync-stats" }),
+    handler: Effect.fn("api.syncStats")(function* (req, env) {
+      const authHeader = req.headers.get("Authorization")
+      if (authHeader !== `Bearer ${env.ADMIN_KEY}`) {
         return yield* json({ error: "Unauthorized" }, 401)
       }
 
-      if (!env.IMAGE_QUEUE) {
-        return yield* json({ error: "IMAGE_QUEUE not configured" }, 500)
-      }
-
       const db = drizzle(env.DB)
-      
-      const allDogs = yield* Effect.tryPromise({
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+      const logs = yield* Effect.tryPromise({
         try: () =>
-          db.select({ id: dogs.id, photos: dogs.photos })
-            .from(dogs)
-            .where(eq(dogs.status, "available"))
+          db.select().from(syncLogs)
+            .where(sql`${syncLogs.startedAt} > ${since.getTime()}`)
+            .orderBy(desc(syncLogs.startedAt))
             .all(),
-        catch: (e) => new DatabaseError({ operation: "backfillListDogs", cause: e })
+        catch: (e) => new DatabaseError({ operation: "get sync stats", cause: e })
       })
 
-      const jobs: { body: { dogId: string; urls: string[] } }[] = []
-
-      for (const dog of allDogs) {
-        const externalUrls = (dog.photos || []).filter((p: string) => p.startsWith("http"))
-        if (externalUrls.length > 0) {
-          jobs.push({ body: { dogId: dog.id, urls: externalUrls } })
-        }
-      }
-
-      if (jobs.length > 0) {
-        const batchSize = 100
-        for (let i = 0; i < jobs.length; i += batchSize) {
-          const chunk = jobs.slice(i, i + batchSize)
-          yield* Effect.tryPromise({
-            try: () => env.IMAGE_QUEUE!.sendBatch(chunk),
-            catch: (e) => new QueueError({ operation: "sendBatch", cause: e })
-          })
-        }
-      }
+      const total = logs.length
+      const successful = logs.filter(l => l.errors.length === 0).length
+      const avgAdded = logs.reduce((sum, l) => sum + l.dogsAdded, 0) / (total || 1)
+      const avgUpdated = logs.reduce((sum, l) => sum + l.dogsUpdated, 0) / (total || 1)
+      const avgRemoved = logs.reduce((sum, l) => sum + l.dogsRemoved, 0) / (total || 1)
+      const recentErrors = logs.flatMap(l => l.errors).slice(0, 10)
 
       return yield* json({
-        status: "ok",
-        scanned: allDogs.length,
-        enqueued: jobs.length
+        period: "24h",
+        totalSyncs: total,
+        successRate: total ? (successful / total) : 1,
+        averages: { added: avgAdded, updated: avgUpdated, removed: avgRemoved },
+        recentErrors,
       })
     }),
   },

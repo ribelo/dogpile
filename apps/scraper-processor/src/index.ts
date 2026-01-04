@@ -3,7 +3,7 @@ import { FetchHttpClient } from "@effect/platform"
 import { drizzle } from "drizzle-orm/d1"
 import { dogs, shelters, syncLogs } from "@dogpile/db"
 import { getAdapter } from "@dogpile/scrapers"
-import { eq } from "drizzle-orm"
+import { eq, and, sql, inArray } from "drizzle-orm"
 import {
   TextExtractor,
   PhotoAnalyzer,
@@ -52,10 +52,11 @@ export default {
   },
 }
 
-const processMessageBase = Effect.fn("scraper.processMessage")(function* (
+export const processMessageBase = (
   message: Message<ScrapeJob>,
-  env: Env
-) {
+  env: Env,
+  syncLogId: string
+) => Effect.gen(function* () {
   const job = message.body
   const db = drizzle(env.DB)
   const adapter = getAdapter(job.shelterSlug)
@@ -66,7 +67,6 @@ const processMessageBase = Effect.fn("scraper.processMessage")(function* (
     return
   }
 
-  const syncLogId = crypto.randomUUID()
   const startedAt = new Date()
 
   yield* Effect.tryPromise({
@@ -94,18 +94,47 @@ const processMessageBase = Effect.fn("scraper.processMessage")(function* (
   const existingDogs = yield* Effect.tryPromise({
     try: () =>
       db
-        .select({ fingerprint: dogs.fingerprint, id: dogs.id })
+        .select({ fingerprint: dogs.fingerprint, id: dogs.id, status: dogs.status })
         .from(dogs)
         .where(eq(dogs.shelterId, job.shelterId))
         .all(),
     catch: (e) => new DatabaseError({ operation: "fetch existing dogs", cause: e }),
   })
 
+  const availableExistingDogs = existingDogs.filter((d) => d.status === "available")
+  const existingCount = availableExistingDogs.length
+  const scrapedCount = rawDogs.length
+  const threshold = 0.7
+
+  if (existingCount > 5 && scrapedCount < existingCount * threshold) {
+    yield* Effect.logWarning(`Significant dog count drop: scraped ${scrapedCount} dogs, expected ~${existingCount}. Proceeding with caution.`)
+    
+    if (scrapedCount < existingCount * 0.3) {
+      const errorMessage = `Circuit breaker triggered: scraped ${scrapedCount} dogs, expected ~${existingCount}. Will retry.`
+      yield* Effect.logWarning(errorMessage)
+
+      yield* Effect.tryPromise({
+        try: () =>
+          db
+            .update(syncLogs)
+            .set({
+              finishedAt: new Date(),
+              errors: [errorMessage],
+            })
+            .where(eq(syncLogs.id, syncLogId)),
+          catch: (e) => new DatabaseError({ operation: "update sync log (circuit breaker)", cause: e }),
+        })
+
+      message.ack()
+      return
+    }
+  }
+
   const existingByFingerprint = new Map(existingDogs.map((d) => [d.fingerprint, d]))
   const scrapedFingerprints = new Set(rawDogs.map((d) => d.fingerprint))
 
   let added = 0
-  const removed = 0
+  let updated = 0
   const reindexJobs: ReindexJob[] = []
   const now = new Date()
 
@@ -250,30 +279,80 @@ const processMessageBase = Effect.fn("scraper.processMessage")(function* (
         try: () =>
           db
             .update(dogs)
-            .set({ lastSeenAt: now })
+            .set({ 
+              lastSeenAt: now, 
+              status: "available",
+              updatedAt: now 
+            })
             .where(eq(dogs.id, existing.id)),
         catch: (e) => new DatabaseError({ operation: "update lastSeenAt", cause: e }),
       })
+      updated++
     }
   }
 
-  for (const existing of existingDogs) {
-    if (!scrapedFingerprints.has(existing.fingerprint)) {
+  // After processing found dogs, sweep for stale dogs
+  const staleThreshold = 36 * 60 * 60 * 1000 // 36 hours in ms
+  let dogsRemoved = 0
+  // Find dogs that haven't been seen in 36+ hours and are still "available"
+  const staleDogs = yield* Effect.tryPromise({
+    try: () =>
+      db
+        .select({ id: dogs.id, fingerprint: dogs.fingerprint })
+        .from(dogs)
+        .where(
+          and(
+            eq(dogs.shelterId, job.shelterId),
+            eq(dogs.status, "available"),
+            sql`${dogs.lastSeenAt} < ${now.getTime() - staleThreshold}`
+          )
+        )
+        .all(),
+    catch: (e) => new DatabaseError({ operation: "find stale dogs", cause: e }),
+  })
+
+  if (staleDogs.length > 0) {
+    const BATCH_SIZE = 500
+    const staleIds = staleDogs.map((d) => d.id)
+
+    // Batch updates in chunks to avoid SQLite variable limit
+    for (let i = 0; i < staleIds.length; i += BATCH_SIZE) {
+      const chunk = staleIds.slice(i, i + BATCH_SIZE)
       yield* Effect.tryPromise({
         try: () =>
-          db.update(dogs).set({ status: "removed" }).where(eq(dogs.id, existing.id)),
-        catch: (e) => new DatabaseError({ operation: "mark dog removed", cause: e }),
+          db.update(dogs)
+            .set({ status: "removed", updatedAt: now })
+            .where(inArray(dogs.id, chunk)),
+        catch: (e) => new DatabaseError({ operation: "mark dogs removed", cause: e }),
       })
-      reindexJobs.push({ type: "delete", dogId: existing.id })
     }
+
+    const QUEUE_BATCH_SIZE = 100
+
+    // Batch queue messages
+    for (let i = 0; i < staleDogs.length; i += QUEUE_BATCH_SIZE) {
+      const chunk = staleDogs.slice(i, i + QUEUE_BATCH_SIZE)
+      yield* Effect.tryPromise({
+        try: () => env.REINDEX_QUEUE.sendBatch(
+          chunk.map(stale => ({ body: { type: "delete" as const, dogId: stale.id } }))
+        ),
+        catch: (e) => new QueueError({ operation: "enqueue delete jobs", cause: e }),
+      })
+    }
+
+    dogsRemoved = staleDogs.length
   }
 
   if (reindexJobs.length > 0) {
-    yield* Effect.tryPromise({
-      try: () =>
-        env.REINDEX_QUEUE.sendBatch(reindexJobs.map((j) => ({ body: j }))),
-      catch: (e) => new QueueError({ operation: "enqueue reindex jobs", cause: e }),
-    })
+    const QUEUE_BATCH_SIZE = 100
+    for (let i = 0; i < reindexJobs.length; i += QUEUE_BATCH_SIZE) {
+      const chunk = reindexJobs.slice(i, i + QUEUE_BATCH_SIZE)
+      yield* Effect.tryPromise({
+        try: () =>
+          env.REINDEX_QUEUE.sendBatch(chunk.map((j) => ({ body: j }))),
+        catch: (e) => new QueueError({ operation: "enqueue reindex jobs", cause: e }),
+      })
+    }
   }
 
   yield* Effect.tryPromise({
@@ -283,8 +362,8 @@ const processMessageBase = Effect.fn("scraper.processMessage")(function* (
         .set({
           finishedAt: new Date(),
           dogsAdded: added,
-          dogsUpdated: 0,
-          dogsRemoved: removed,
+          dogsUpdated: updated,
+          dogsRemoved,
         })
         .where(eq(syncLogs.id, syncLogId)),
     catch: (e) => new DatabaseError({ operation: "update sync log", cause: e }),
@@ -300,14 +379,15 @@ const processMessageBase = Effect.fn("scraper.processMessage")(function* (
   })
 
   yield* Effect.logInfo(
-    `Sync complete for ${job.shelterId}: +${added} -${removed}`
+    `Sync complete for ${job.shelterId}: +${added} -${dogsRemoved}`
   )
 
   message.ack()
 })
 
-const processMessage = (message: Message<ScrapeJob>, env: Env) =>
-  processMessageBase(message, env).pipe(
+const processMessage = (message: Message<ScrapeJob>, env: Env) => {
+  const syncLogId = crypto.randomUUID()
+  return processMessageBase(message, env, syncLogId).pipe(
     Effect.provide(
       Layer.mergeAll(
         FetchHttpClient.layer,
@@ -325,7 +405,21 @@ const processMessage = (message: Message<ScrapeJob>, env: Env) =>
     Effect.catchAll((error) =>
       Effect.gen(function* () {
         yield* Effect.logError(`Scrape failed: ${error}`)
-        message.retry()
+        const db = drizzle(env.DB)
+        yield* Effect.tryPromise({
+          try: () =>
+            db
+              .update(syncLogs)
+              .set({
+                finishedAt: new Date(),
+                errors: [String(error)],
+              })
+              .where(eq(syncLogs.id, syncLogId)),
+          catch: (e) => new DatabaseError({ operation: "update sync log (error)", cause: e })
+        }).pipe(Effect.catchAll(() => Effect.void))
+        message.ack()
       })
-    )
+    ),
+    Effect.withSpan("scraper.processMessage")
   )
+}

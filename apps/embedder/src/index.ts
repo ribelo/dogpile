@@ -1,4 +1,5 @@
 import { Effect } from "effect"
+import { Schedule } from "effect"
 import { Schema } from "effect"
 
 class VectorizeError extends Schema.TaggedError<VectorizeError>()("VectorizeError", {
@@ -38,7 +39,11 @@ export default {
         yield* Effect.tryPromise({
           try: () => env.VECTORIZE.deleteByIds(ids),
           catch: (e) => new VectorizeError({ operation: "delete", cause: e }),
-        })
+        }).pipe(
+          Effect.retry(
+            Schedule.exponential("100 millis").pipe(Schedule.compose(Schedule.recurs(3)))
+          )
+        )
         yield* Effect.logInfo(`Deleted ${ids.length} vectors`)
         deletes.forEach((m) => m.ack())
       }

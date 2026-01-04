@@ -14,6 +14,7 @@ if (!response.ok) {
 }
 
 const dog = await response.json()
+dog.isRemoved = dog.status === 'removed'
 const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0]) 
   ? getPhotoUrl(dog.photosGenerated?.[0] || dog.photos?.[0], 'lg') 
   : undefined
@@ -21,11 +22,18 @@ const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0])
 
 <Layout title={`${dog.name} - Dogpile`} image={ogImage}>
   <main class="grain-overlay min-h-screen pt-12 pb-24 px-6">
-    <div class="max-w-4xl mx-auto">
+    <div class={`max-w-4xl mx-auto ${dog.isRemoved ? 'opacity-60' : ''}`}>
       <a href="/" class="link-arrow mb-12">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
         Back to the pile
       </a>
+
+      {dog.isRemoved && (
+        <div class="bg-sys-state-urgent/10 border-2 border-sys-state-urgent text-sys-state-urgent p-4 mb-8 paper-edge text-center">
+          <p class="font-bold text-lg">This dog is no longer available for adoption</p>
+          <p class="text-sm opacity-80 mt-1">They may have been adopted or transferred to another shelter</p>
+        </div>
+      )}
 
       <div class="bg-sys-paper-card paper-edge overflow-hidden p-8 md:p-12">
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
@@ -99,9 +107,11 @@ const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0])
               </div>
             </div>
 
-            <a href={dog.sourceUrl} target="_blank" rel="noopener noreferrer" class="btn-primary w-full text-center block text-2xl lowercase">
-              say hello to {dog.name}
-            </a>
+            {!dog.isRemoved && (
+              <a href={dog.sourceUrl} target="_blank" rel="noopener noreferrer" class="btn-primary w-full text-center block text-2xl lowercase">
+                say hello to {dog.name}
+              </a>
+            )}
           </div>
         </div>
 

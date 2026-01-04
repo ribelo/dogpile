@@ -1,10 +1,17 @@
-import { createResource, For, Show, Switch, Match } from "solid-js"
+import { createResource, createSignal, onMount, onCleanup, For, Show, Switch, Match } from "solid-js"
 import DogCard from "./DogCard"
 import type { Dog } from "./types"
 
-async function fetchDogs(url: string): Promise<Dog[]> {
-  const cleanUrl = url.replace(/\/$/, "")
-  const response = await fetch(`${cleanUrl}/dogs`)
+async function fetchDogs({ apiUrl, filters }: { apiUrl: string, filters: DogFilters }): Promise<Dog[]> {
+  const cleanUrl = apiUrl.replace(/\/$/, "")
+  const base = typeof window !== 'undefined' ? window.location.href : 'http://localhost'
+  const url = new URL(`${cleanUrl}/dogs`, base)
+  
+  if (filters.city) url.searchParams.set("city", filters.city)
+  if (filters.size) url.searchParams.set("size", filters.size)
+  if (filters.sex) url.searchParams.set("sex", filters.sex)
+
+  const response = await fetch(url.toString())
   if (!response.ok) {
     throw new Error("Failed to fetch dogs")
   }
@@ -14,6 +21,13 @@ async function fetchDogs(url: string): Promise<Dog[]> {
 
 interface DogGridProps {
   apiUrl: string
+  filters?: DogFilters
+}
+
+export interface DogFilters {
+  city?: string
+  size?: string
+  sex?: string
 }
 
 const SkeletonCard = () => (
@@ -49,7 +63,21 @@ const EmptyState = () => (
 )
 
 export default function DogGrid(props: DogGridProps) {
-  const [dogs] = createResource(() => props.apiUrl, fetchDogs)
+  const [filters, setFilters] = createSignal<DogFilters>(props.filters || {})
+
+  const [dogs] = createResource(
+    () => ({ apiUrl: props.apiUrl, filters: filters() }),
+    fetchDogs
+  )
+
+  onMount(() => {
+    const handleFiltersChanged = (e: Event) => {
+      const newFilters = (e as CustomEvent).detail
+      setFilters(newFilters)
+    }
+    window.addEventListener('dog-filters-changed', handleFiltersChanged)
+    onCleanup(() => window.removeEventListener('dog-filters-changed', handleFiltersChanged))
+  })
 
   return (
     <section id="dogs" class="py-8">

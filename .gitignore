@@ -13,3 +13,4 @@ dist/
 
 # Effect source reference (cloned repo)
 third-party/effect/
+.astro/
