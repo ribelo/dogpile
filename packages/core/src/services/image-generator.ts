@@ -52,89 +52,89 @@ export interface GeneratePhotosInput {
   readonly referencePhotoUrl?: string | undefined
 }
 
-export interface ImageGenerator {
-  readonly generatePhotos: (
-    input: GeneratePhotosInput
-  ) => Effect.Effect<ImageGeneratorOutput | null, OpenRouterError | RateLimitError | NetworkError>
-}
+export class ImageGenerator extends Context.Tag("@dogpile/ImageGenerator")<
+  ImageGenerator,
+  {
+    readonly generatePhotos: (
+      input: GeneratePhotosInput
+    ) => Effect.Effect<ImageGeneratorOutput | null, OpenRouterError | RateLimitError | NetworkError>
+  }
+>() {
+  static readonly Live = Layer.effect(
+    this,
+    Effect.gen(function* () {
+      const client = yield* OpenRouterClient
+      const config = yield* aiConfig
 
-export const ImageGenerator = Context.GenericTag<ImageGenerator>(
-  "@dogpile/ImageGenerator"
-)
+      return {
+        generatePhotos: Effect.fn("ImageGenerator.generatePhotos")(function* (
+          input: GeneratePhotosInput
+        ) {
+            const professionalPrompt = buildPrompt(professionalPromptTemplate, input.dogDescription)
+            const funNosePrompt = buildPrompt(funNosePromptTemplate, input.dogDescription)
+
+            const generateSinglePhoto = (prompt: string): Effect.Effect<GeneratedPhoto | null, OpenRouterError | RateLimitError | NetworkError> =>
+              Effect.gen(function* () {
+                const messageContent: ChatMessage["content"] = input.referencePhotoUrl
+                  ? [
+                      {
+                        type: "image_url" as const,
+                        image_url: {
+                          url: input.referencePhotoUrl,
+                          detail: "high" as const,
+                        },
+                      },
+                      {
+                        type: "text" as const,
+                        text: prompt,
+                      },
+                    ]
+                  : prompt
+
+                const result: ChatCompletionsResult = yield* client.chatCompletions({
+                  model: config.imageGenerationModel,
+                  messages: [
+                    {
+                      role: "user",
+                      content: messageContent,
+                    },
+                  ],
+                  modalities: ["image", "text"],
+                  image_config: {
+                    aspect_ratio: "4:5",
+                  },
+                })
+
+                if (!result.choices || result.choices.length === 0) {
+                  return null
+                }
+
+                const image = result.choices[0]?.message?.images?.[0]?.image_url?.url
+                if (!image) {
+                  return null
+                }
+
+                return { base64Url: image }
+              })
+
+            const [professional, funNose] = yield* Effect.all([
+              generateSinglePhoto(professionalPrompt),
+              generateSinglePhoto(funNosePrompt),
+            ], { concurrency: 2 })
+
+            if (!professional && !funNose) {
+              return null
+            }
+
+            return { professional, funNose }
+          }),
+      }
+    })
+  )
+}
 
 const buildPrompt = (template: PromptTemplate, dogDescription: string): string => {
   const prompt = JSON.parse(JSON.stringify(template))
   prompt.subject.dog_description = dogDescription
   return JSON.stringify(prompt)
 }
-
-export const ImageGeneratorLive = Layer.effect(
-  ImageGenerator,
-  Effect.gen(function* () {
-    const client = yield* OpenRouterClient
-    const config = yield* aiConfig
-
-    return {
-      generatePhotos: (input: GeneratePhotosInput) =>
-        Effect.gen(function* () {
-          const professionalPrompt = buildPrompt(professionalPromptTemplate, input.dogDescription)
-          const funNosePrompt = buildPrompt(funNosePromptTemplate, input.dogDescription)
-
-          const generateSinglePhoto = (prompt: string): Effect.Effect<GeneratedPhoto | null, OpenRouterError | RateLimitError | NetworkError> =>
-            Effect.gen(function* () {
-              const messageContent: ChatMessage["content"] = input.referencePhotoUrl
-                ? [
-                    {
-                      type: "image_url" as const,
-                      image_url: {
-                        url: input.referencePhotoUrl,
-                        detail: "high" as const,
-                      },
-                    },
-                    {
-                      type: "text" as const,
-                      text: prompt,
-                    },
-                  ]
-                : prompt
-
-              const result: ChatCompletionsResult = yield* client.chatCompletions({
-                model: config.imageGenerationModel,
-                messages: [
-                  {
-                    role: "user",
-                    content: messageContent,
-                  },
-                ],
-                modalities: ["image", "text"],
-                image_config: {
-                  aspect_ratio: "4:5",
-                },
-              })
-
-              if (!result.choices || result.choices.length === 0) {
-                return null
-              }
-
-              const image = result.choices[0]?.message?.images?.[0]?.image_url?.url
-              if (!image) {
-                return null
-              }
-
-              return { base64Url: image }
-            })
-
-          const [professional, funNose] = yield* Effect.all([
-            generateSinglePhoto(professionalPrompt),
-            generateSinglePhoto(funNosePrompt),
-          ], { concurrency: 2 })
-
-          if (!professional && !funNose) {
-            return null
-          }
-
-          return { professional, funNose }
-        }),
-    }
-  })
-)

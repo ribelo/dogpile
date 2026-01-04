@@ -8,75 +8,83 @@ import { ExtractionError } from "./ai-extraction.js"
 import promptTemplate from "../../prompts/photo-analysis.md" with { type: "text" }
 import type { ChatMessage } from "./openrouter/types.js"
 
-export interface PhotoAnalyzer {
-  readonly analyze: (photoUrl: string) => Effect.Effect<PhotoExtraction, ExtractionError>
-  readonly analyzeMultiple: (photoUrls: readonly string[]) => Effect.Effect<PhotoExtraction, ExtractionError>
-}
-
-export const PhotoAnalyzer = Context.GenericTag<PhotoAnalyzer>("@dogpile/PhotoAnalyzer")
-
-export const PhotoAnalyzerLive = Layer.effect(
+export class PhotoAnalyzer extends Context.Tag("@dogpile/PhotoAnalyzer")<
   PhotoAnalyzer,
-  Effect.gen(function* () {
-    const client = yield* OpenRouterClient
-    const config = yield* aiConfig
+  {
+    readonly analyze: (photoUrl: string) => Effect.Effect<PhotoExtraction, ExtractionError>
+    readonly analyzeMultiple: (photoUrls: readonly string[]) => Effect.Effect<PhotoExtraction, ExtractionError>
+  }
+>() {
+  static readonly Live = Layer.effect(
+    this,
+    Effect.gen(function* () {
+      const client = yield* OpenRouterClient
+      const config = yield* aiConfig
 
-    const prompt = promptTemplate.replace("{{BREED_LIST}}", BREEDS.join(", "))
+      const prompt = promptTemplate.replace("{{BREED_LIST}}", BREEDS.join(", "))
 
-    const doAnalyze = (imageUrls: readonly string[]) =>
-      Effect.gen(function* () {
-        const imageContent = imageUrls.map((url) => ({
-          type: "image_url" as const,
-          image_url: { url },
-        }))
+      const doAnalyze = (name: string) =>
+        Effect.fn(name)(function* (imageUrls: readonly string[]) {
+          const imageContent = imageUrls.map((url) => ({
+            type: "image_url" as const,
+            image_url: { url },
+          }))
 
-        const messages: ChatMessage[] = [
-          { role: "system", content: "Analyze the dog photo(s) and extract structured data. Return valid JSON only." },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              ...imageContent,
-            ],
-          },
-        ]
-
-        const response = yield* client.chatCompletions({
-          model: config.photoAnalysisModel,
-          messages,
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "photo_extraction",
-              strict: true,
-              schema: toJsonSchema(PhotoExtractionSchema),
+          const messages: ChatMessage[] = [
+            {
+              role: "system",
+              content: "Analyze the dog photo(s) and extract structured data. Return valid JSON only.",
             },
-          },
-        }).pipe(
-          Effect.mapError((e) => new ExtractionError("photo", e, String(e)))
-        )
+            {
+              role: "user",
+              content: [{ type: "text", text: prompt }, ...imageContent],
+            },
+          ]
 
-        const textContent = response.choices[0]?.message?.content
-        if (!textContent) {
-          return yield* Effect.fail(new ExtractionError("photo", null, "No text in response"))
-        }
+          const response = yield* client
+            .chatCompletions({
+              model: config.photoAnalysisModel,
+              messages,
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: "photo_extraction",
+                  strict: true,
+                  schema: toJsonSchema(PhotoExtractionSchema),
+                },
+              },
+            })
+            .pipe(
+              Effect.mapError((e) => new ExtractionError({ source: "photo", cause: e, message: String(e) }))
+            )
 
-  const stripMarkdown = (s: string): string =>
-    s.replace(/^\s*```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim()
+          const textContent = response.choices[0]?.message?.content
+          if (!textContent) {
+            return yield* Effect.fail(
+              new ExtractionError({ source: "photo", cause: null, message: "No text in response" })
+            )
+          }
 
-        const json = yield* Effect.try({
-          try: () => JSON.parse(stripMarkdown(textContent)),
-          catch: (e) => new ExtractionError("photo", e, "Failed to parse JSON response"),
-        })
+          const stripMarkdown = (s: string): string =>
+            s.replace(/^\s*```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim()
 
-        return yield* Schema.decodeUnknown(PhotoExtractionSchema)(json).pipe(
-          Effect.mapError((e) => new ExtractionError("photo", e, "Validation failed"))
-        )
-      })
+          const json = yield* Effect.try({
+            try: () => JSON.parse(stripMarkdown(textContent)),
+            catch: (e) =>
+              new ExtractionError({ source: "photo", cause: e, message: "Failed to parse JSON response" }),
+          })
 
-    return {
-      analyze: (photoUrl) => doAnalyze([photoUrl]),
-      analyzeMultiple: (photoUrls) => doAnalyze(photoUrls),
-    }
-  })
-)
+          return yield* Schema.decodeUnknown(PhotoExtractionSchema)(json).pipe(
+              Effect.mapError((e) =>
+                new ExtractionError({ source: "photo", cause: e, message: "Validation failed" })
+              )
+            )
+          })
+
+      return {
+        analyze: (photoUrl) => doAnalyze("PhotoAnalyzer.analyze")([photoUrl]),
+        analyzeMultiple: (photoUrls) => doAnalyze("PhotoAnalyzer.analyzeMultiple")(photoUrls),
+      }
+    })
+  )
+}

@@ -6,23 +6,24 @@ import { Database } from "bun:sqlite"
 import { globSync } from "glob"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { UnrecoverableError } from "../errors"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, "../../../..")
 const CONFIG_PATH = path.join(REPO_ROOT, "apps/api/wrangler.toml")
 
-const findLocalDb = (): string => {
+const findLocalDb = () => Effect.gen(function* () {
   const pattern = path.join(REPO_ROOT, "apps/api/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite")
   const paths = globSync(pattern)
   const dbPaths = paths.filter(p => !p.endsWith("-shm") && !p.endsWith("-wal"))
   if (dbPaths.length === 0) {
-    throw new Error("Local SQLite DB not found")
+    return yield* new UnrecoverableError({ reason: "Local SQLite DB not found" })
   }
   return dbPaths[0]
-}
+})
 
-const getR2KeysFromDb = (): string[] => {
-  const dbPath = findLocalDb()
+const getR2KeysFromDb = () => Effect.gen(function* () {
+  const dbPath = yield* findLocalDb()
   const db = new Database(dbPath, { readonly: true })
   const rows = db.query("SELECT photos_generated FROM dogs WHERE photos_generated != '[]'").all() as { photos_generated: string }[]
   db.close()
@@ -38,7 +39,7 @@ const getR2KeysFromDb = (): string[] => {
     }
   }
   return keys
-}
+})
 
 const pullCommand = Command.make("pull", {}, () =>
   Effect.gen(function* () {
@@ -101,7 +102,7 @@ const pushCommand = Command.make("push", {}, () =>
     yield* Console.log("Pushing R2 generated photos to remote...")
 
     // Get keys from local DB
-    const keys = getR2KeysFromDb()
+    const keys = yield* getR2KeysFromDb()
     yield* Console.log(`Found ${keys.length} photo keys in local DB`)
 
     if (keys.length === 0) {

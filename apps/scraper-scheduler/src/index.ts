@@ -1,7 +1,13 @@
 import { Effect } from "effect"
+import { Schema } from "effect"
 import { drizzle } from "drizzle-orm/d1"
 import { shelters } from "@dogpile/db"
 import { lt, eq, or, isNull } from "drizzle-orm"
+
+class SchedulerError extends Schema.TaggedError<SchedulerError>()("SchedulerError", {
+  operation: Schema.String,
+  cause: Schema.Defect,
+}) {}
 
 interface Env {
   DB: D1Database
@@ -38,7 +44,7 @@ export default {
               )
             )
             .all(),
-        catch: (error) => new Error(`Failed to fetch shelters: ${error}`),
+        catch: (error) => new SchedulerError({ operation: "fetch shelters", cause: error }),
       })
 
       yield* Effect.logInfo(`Found ${dueShelters.length} shelters due for sync`)
@@ -52,7 +58,7 @@ export default {
       if (jobs.length > 0) {
         yield* Effect.tryPromise({
           try: () => env.SCRAPE_QUEUE.sendBatch(jobs.map((job) => ({ body: job }))),
-          catch: (error) => new Error(`Failed to enqueue jobs: ${error}`),
+          catch: (error) => new SchedulerError({ operation: "enqueue jobs", cause: error }),
         })
         yield* Effect.logInfo(`Enqueued ${jobs.length} scrape jobs`)
       }

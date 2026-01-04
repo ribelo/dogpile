@@ -8,21 +8,22 @@ import { globSync } from "glob"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { $ } from "bun"
+import { UnrecoverableError } from "../errors"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, "../../../..")
 const CONFIG_PATH = path.join(REPO_ROOT, "apps/api/wrangler.toml")
 const DB_NAME = "dogpile-db"
 
-const findLocalDb = (): string => {
+const findLocalDb = () => Effect.gen(function* () {
   const pattern = path.join(REPO_ROOT, "apps/api/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite")
   const paths = globSync(pattern)
   const dbPaths = paths.filter(p => !p.endsWith("-shm") && !p.endsWith("-wal"))
   if (dbPaths.length === 0) {
-    throw new Error("Local SQLite DB not found. Run 'wrangler d1 migrations apply dogpile-db --local' in apps/api first.")
+    return yield* new UnrecoverableError({ reason: "Local SQLite DB not found. Run 'wrangler d1 migrations apply dogpile-db --local' in apps/api first." })
   }
   return dbPaths[0]
-}
+})
 
 const escapeSQL = (val: unknown): string => {
   if (val === null || val === undefined) return "NULL"
@@ -45,13 +46,13 @@ const pullCommand = Command.make("pull", {}, () =>
       const output = execSync(cmd, { encoding: "utf8", cwd: REPO_ROOT })
       const jsonMatch = output.match(/\[[\s\S]*\]/)
       if (!jsonMatch) {
-        throw new Error(`Failed to parse wrangler output for ${table}: ${output.slice(0, 200)}`)
+        return yield* new UnrecoverableError({ reason: `Failed to parse wrangler output for ${table}: ${output.slice(0, 200)}` })
       }
       const result = JSON.parse(jsonMatch[0])
       data[table] = result[0].results
     }
 
-    const dbPath = findLocalDb()
+    const dbPath = yield* findLocalDb()
     yield* Console.log(`Updating local DB at ${dbPath}...`)
     const db = new Database(dbPath)
 
@@ -89,7 +90,7 @@ const pushCommand = Command.make("push", {}, () =>
   Effect.gen(function* () {
     yield* Console.log("Pushing data to remote D1...")
 
-    const dbPath = findLocalDb()
+    const dbPath = yield* findLocalDb()
     const db = new Database(dbPath)
 
     let sql = "PRAGMA foreign_keys = OFF;\n"
@@ -132,7 +133,7 @@ const validateCommand = Command.make("validate", {}, () =>
   Effect.gen(function* () {
     yield* Console.log("Validating DB ↔ R2 photo consistency...")
     
-    const dbPath = findLocalDb()
+    const dbPath = yield* findLocalDb()
     const db = new Database(dbPath)
     
     const dogs = db.query("SELECT fingerprint, photos_generated FROM dogs WHERE photos_generated != '[]' AND photos_generated IS NOT NULL").all() as { fingerprint: string; photos_generated: string }[]

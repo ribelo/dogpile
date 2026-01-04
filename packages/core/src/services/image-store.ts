@@ -8,4 +8,12 @@ export interface ImageStore {
   readonly getUrl: (key: string) => Effect.Effect<string, StorageError>
 }
 
-export const ImageStore = Context.GenericTag<ImageStore>("@dogpile/ImageStore")
+export class ImageStore extends Context.Tag("@dogpile/ImageStore")<
+  ImageStore,
+  {
+    readonly upload: (key: string, data: ArrayBuffer, contentType: string) => Effect.Effect<string, StorageError>
+    readonly download: (key: string) => Effect.Effect<ArrayBuffer, NotFoundError | StorageError>
+    readonly delete: (key: string) => Effect.Effect<void, StorageError>
+    readonly getUrl: (key: string) => Effect.Effect<string, StorageError>
+  }
+>() {}

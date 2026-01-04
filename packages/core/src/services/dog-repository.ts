@@ -50,21 +50,19 @@ export interface DogFilters {
   readonly offset?: number
 }
 
-export interface DogRepository {
-  readonly findById: (id: string) => Effect.Effect<Dog, NotFoundError | StorageError>
-  readonly findByExternalId: (shelterId: string, externalId: string) => Effect.Effect<Dog | null, StorageError>
-  readonly findAll: (filters: DogFilters) => Effect.Effect<readonly Dog[], StorageError>
-  readonly findByIds: (ids: readonly string[]) => Effect.Effect<readonly Dog[], StorageError>
-  readonly create: (dog: CreateDogInput) => Effect.Effect<Dog, StorageError>
-  readonly update: (id: string, dog: Partial<CreateDogInput>) => Effect.Effect<Dog, NotFoundError | StorageError>
-  readonly delete: (id: string) => Effect.Effect<void, StorageError>
-  readonly deleteByShelterId: (shelterId: string) => Effect.Effect<number, StorageError>
-  readonly getChecksumsByShelterId: (shelterId: string) => Effect.Effect<ReadonlyMap<string, string>, StorageError>
+export class DogRepository extends Context.Tag("@dogpile/DogRepository")<
+  DogRepository,
+  {
+    readonly findById: (id: string) => Effect.Effect<Dog, NotFoundError | StorageError>
+    readonly findByExternalId: (shelterId: string, externalId: string) => Effect.Effect<Dog | null, StorageError>
+    readonly findAll: (filters: DogFilters) => Effect.Effect<readonly Dog[], StorageError>
+    readonly findByIds: (ids: readonly string[]) => Effect.Effect<readonly Dog[], StorageError>
+    readonly create: (dog: CreateDogInput) => Effect.Effect<Dog, StorageError>
+    readonly update: (id: string, dog: Partial<CreateDogInput>) => Effect.Effect<Dog, NotFoundError | StorageError>
+    readonly delete: (id: string) => Effect.Effect<void, StorageError>
+    readonly deleteByShelterId: (shelterId: string) => Effect.Effect<number, StorageError>
+    readonly getChecksumsByShelterId: (shelterId: string) => Effect.Effect<ReadonlyMap<string, string>, StorageError>
+  }
+>() {
+  static readonly make = (impl: Context.Tag.Service<DogRepository>) => Layer.succeed(this, impl)
 }
-
-export const DogRepository = Context.GenericTag<DogRepository>("@dogpile/DogRepository")
-
-export const makeDogRepository = (
-  impl: DogRepository
-): Layer.Layer<DogRepository> =>
-  Layer.succeed(DogRepository, impl)

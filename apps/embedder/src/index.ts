@@ -1,4 +1,15 @@
 import { Effect } from "effect"
+import { Schema } from "effect"
+
+class VectorizeError extends Schema.TaggedError<VectorizeError>()("VectorizeError", {
+  operation: Schema.String,
+  cause: Schema.Defect,
+}) {}
+
+class EmbeddingApiError extends Schema.TaggedError<EmbeddingApiError>()("EmbeddingApiError", {
+  endpoint: Schema.String,
+  cause: Schema.Defect,
+}) {}
 
 interface Env {
   VECTORIZE: VectorizeIndex
@@ -26,7 +37,7 @@ export default {
         const ids = deletes.map((m) => m.body.dogId)
         yield* Effect.tryPromise({
           try: () => env.VECTORIZE.deleteByIds(ids),
-          catch: (e) => new Error(`Failed to delete vectors: ${e}`),
+          catch: (e) => new VectorizeError({ operation: "delete", cause: e }),
         })
         yield* Effect.logInfo(`Deleted ${ids.length} vectors`)
         deletes.forEach((m) => m.ack())
@@ -51,7 +62,7 @@ export default {
 
             if (!response.ok) {
               const error = await response.text()
-              throw new Error(`OpenRouter API error: ${error}`)
+              throw error
             }
 
             const data = await response.json() as {
@@ -59,7 +70,7 @@ export default {
             }
             return data.data.map((d) => d.embedding)
           },
-          catch: (e) => new Error(`Failed to generate embeddings: ${e}`),
+          catch: (e) => new EmbeddingApiError({ endpoint: "https://openrouter.ai/api/v1/embeddings", cause: e }),
         })
 
         const vectors = upserts.map((m, i) => ({
@@ -70,7 +81,7 @@ export default {
 
         yield* Effect.tryPromise({
           try: () => env.VECTORIZE.upsert(vectors),
-          catch: (e) => new Error(`Failed to upsert vectors: ${e}`),
+          catch: (e) => new VectorizeError({ operation: "upsert", cause: e }),
         })
 
         yield* Effect.logInfo(`Upserted ${vectors.length} vectors`)

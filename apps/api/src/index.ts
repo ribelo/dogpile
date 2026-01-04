@@ -2,6 +2,7 @@ import { Effect } from "effect"
 import { drizzle } from "drizzle-orm/d1"
 import { dogs, shelters } from "@dogpile/db"
 import { eq, desc, and, like, sql } from "drizzle-orm"
+import { DatabaseError, R2Error, QueueError } from "./errors"
 
 interface Env {
   DB: D1Database
@@ -16,11 +17,13 @@ interface Env {
   ADMIN_KEY?: string
 }
 
+type ApiError = DatabaseError | R2Error | QueueError
+
 type RouteHandler = (
   request: Request,
   env: Env,
   params: Record<string, string>
-) => Effect.Effect<Response, never, never>
+) => Effect.Effect<Response, ApiError, never>
 
 interface Route {
   method: string
@@ -49,12 +52,12 @@ const routes: Route[] = [
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/health" }),
-    handler: () => json({ status: "ok", timestamp: new Date().toISOString() }),
+    handler: Effect.fn("api.health")(() => json({ status: "ok", timestamp: new Date().toISOString() })),
   },
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/dogs" }),
-    handler: (req, env) => Effect.gen(function* () {
+    handler: Effect.fn("api.listDogs")(function* (req, env) {
       const url = new URL(req.url)
       const db = drizzle(env.DB)
       const limit = parseInt(url.searchParams.get("limit") ?? "20")
@@ -71,10 +74,7 @@ const routes: Route[] = [
             .limit(limit)
             .offset(offset)
             .all(),
-        catch: (e) => {
-          console.error("D1 query error:", e)
-          throw e
-        }
+        catch: (e) => new DatabaseError({ operation: "listDogs", cause: e })
       })
 
       return yield* json({ dogs: results ?? [], total: results?.length ?? 0 })
@@ -83,11 +83,12 @@ const routes: Route[] = [
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/dogs/:id" }),
-    handler: (_req, env, params) => Effect.gen(function* () {
+    handler: Effect.fn("api.getDog")(function* (_req, env, params) {
       const db = drizzle(env.DB)
-      const result = yield* Effect.promise(() =>
-        db.select().from(dogs).where(eq(dogs.id, params.id)).get()
-      )
+      const result = yield* Effect.tryPromise({
+        try: () => db.select().from(dogs).where(eq(dogs.id, params.id)).get(),
+        catch: (e) => new DatabaseError({ operation: "getDog", cause: e })
+      })
       if (!result) {
         return yield* json({ error: "Dog not found" }, 404)
       }
@@ -97,16 +98,19 @@ const routes: Route[] = [
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/shelters" }),
-    handler: (_req, env) => Effect.gen(function* () {
+    handler: Effect.fn("api.listShelters")(function* (_req, env) {
       const db = drizzle(env.DB)
-      const results = yield* Effect.promise(() => db.select().from(shelters).all())
+      const results = yield* Effect.tryPromise({
+        try: () => db.select().from(shelters).all(),
+        catch: (e) => new DatabaseError({ operation: "listShelters", cause: e })
+      })
       return yield* json({ shelters: results })
     }),
   },
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/dogs/search" }),
-    handler: (req, env) => Effect.gen(function* () {
+    handler: Effect.fn("api.searchDogs")(function* (req, env) {
       const url = new URL(req.url)
       const query = url.searchParams.get("q")
       if (!query) {
@@ -116,14 +120,16 @@ const routes: Route[] = [
       const db = drizzle(env.DB)
       // For now, just return text search results
       // TODO: Integrate with Vectorize when EmbeddingService is wired
-      const results = yield* Effect.promise(() =>
-        db
-          .select()
-          .from(dogs)
-          .where(like(dogs.generatedBio, `%${query}%`))
-          .limit(10)
-          .all()
-      )
+      const results = yield* Effect.tryPromise({
+        try: () =>
+          db
+            .select()
+            .from(dogs)
+            .where(like(dogs.generatedBio, `%${query}%`))
+            .limit(10)
+            .all(),
+        catch: (e) => new DatabaseError({ operation: "searchDogs", cause: e })
+      })
 
       return yield* json({ dogs: results, scores: results.map(() => 1.0) })
     }),
@@ -131,9 +137,12 @@ const routes: Route[] = [
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/photos/generated/:key" }),
-    handler: (_req, env, params) => Effect.gen(function* () {
+    handler: Effect.fn("api.getGeneratedPhoto")(function* (_req, env, params) {
       const key = decodeURIComponent(params.key)
-      const object = yield* Effect.promise(() => env.PHOTOS_GENERATED.get(key))
+      const object = yield* Effect.tryPromise({
+        try: () => env.PHOTOS_GENERATED.get(key),
+        catch: (e) => new R2Error({ operation: "getGeneratedPhoto", cause: e })
+      })
       
       if (!object) {
         return yield* json({ error: "Photo not found" }, 404)
@@ -151,10 +160,13 @@ const routes: Route[] = [
   {
     method: "POST",
     pattern: new URLPattern({ pathname: "/admin/sync-generated-photos" }),
-    handler: (req, env) => Effect.gen(function* () {
+    handler: Effect.fn("api.adminSyncGeneratedPhotos")(function* (req, env) {
       const publicDomain = "dogpile-generated.extropy.club"
       
-      const listed = yield* Effect.promise(() => env.PHOTOS_GENERATED.list())
+      const listed = yield* Effect.tryPromise({
+        try: () => env.PHOTOS_GENERATED.list(),
+        catch: (e) => new R2Error({ operation: "listGeneratedPhotos", cause: e })
+      })
       
       const updates: { fingerprint: string; url: string }[] = []
       
@@ -169,11 +181,13 @@ const routes: Route[] = [
       
       let updated = 0
       for (const { fingerprint, url } of updates) {
-        const result = yield* Effect.promise(() =>
-          env.DB.prepare(
-            `UPDATE dogs SET photos_generated = ? WHERE fingerprint = ?`
-          ).bind(JSON.stringify([url]), fingerprint).run()
-        )
+        const result = yield* Effect.tryPromise({
+          try: () =>
+            env.DB.prepare(
+              `UPDATE dogs SET photos_generated = ? WHERE fingerprint = ?`
+            ).bind(JSON.stringify([url]), fingerprint).run(),
+          catch: (e) => new DatabaseError({ operation: "syncPhotosUpdate", cause: e })
+        })
         if (result.meta.changes > 0) updated++
       }
       
@@ -188,7 +202,7 @@ const routes: Route[] = [
   {
     method: "POST",
     pattern: new URLPattern({ pathname: "/admin/backfill-images" }),
-    handler: (req, env) => Effect.gen(function* () {
+    handler: Effect.fn("api.adminBackfillImages")(function* (req, env) {
       const auth = req.headers.get("Authorization")
       if (!env.ADMIN_KEY || auth !== `Bearer ${env.ADMIN_KEY}`) {
         return yield* json({ error: "Unauthorized" }, 401)
@@ -200,12 +214,14 @@ const routes: Route[] = [
 
       const db = drizzle(env.DB)
       
-      const allDogs = yield* Effect.promise(() =>
-        db.select({ id: dogs.id, photos: dogs.photos })
-          .from(dogs)
-          .where(eq(dogs.status, "available"))
-          .all()
-      )
+      const allDogs = yield* Effect.tryPromise({
+        try: () =>
+          db.select({ id: dogs.id, photos: dogs.photos })
+            .from(dogs)
+            .where(eq(dogs.status, "available"))
+            .all(),
+        catch: (e) => new DatabaseError({ operation: "backfillListDogs", cause: e })
+      })
 
       const jobs: { body: { dogId: string; urls: string[] } }[] = []
 
@@ -220,7 +236,10 @@ const routes: Route[] = [
         const batchSize = 100
         for (let i = 0; i < jobs.length; i += batchSize) {
           const chunk = jobs.slice(i, i + batchSize)
-          yield* Effect.promise(() => env.IMAGE_QUEUE!.sendBatch(chunk))
+          yield* Effect.tryPromise({
+            try: () => env.IMAGE_QUEUE!.sendBatch(chunk),
+            catch: (e) => new QueueError({ operation: "sendBatch", cause: e })
+          })
         }
       }
 
@@ -249,10 +268,20 @@ export default {
       const match = route.pattern.exec(url)
       if (match) {
         const params = match.pathname.groups as Record<string, string>
-        return Effect.runPromise(route.handler(request, env, params))
+        const program = route.handler(request, env, params).pipe(
+          Effect.catchAll((error) => {
+            console.error(`API Error [${error._tag}]:`, error)
+            return json({
+              error: error._tag,
+              message: "An internal error occurred",
+              operation: (error as any).operation
+            }, 500)
+          })
+        )
+        return Effect.runPromise(program)
       }
     }
 
-    return Effect.runPromise(notFound())
+    return Effect.runPromise(notFound() as any)
   },
 }

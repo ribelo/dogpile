@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import type {
   BreedEstimate,
   SizeEstimate,
@@ -47,26 +47,19 @@ export interface PhotoExtractionResult {
   readonly tailType: TailType | null
 }
 
-export class ExtractionError extends Error {
-  readonly _tag = "ExtractionError"
-  constructor(
-    readonly source: "text" | "photo",
-    override readonly cause: unknown,
-    message: string
-  ) {
-    super(message)
+export class ExtractionError extends Schema.TaggedError<ExtractionError>()("ExtractionError", {
+  source: Schema.Literal("text", "photo"),
+  cause: Schema.Unknown,
+  message: Schema.String,
+}) {}
+
+export class AIExtractionService extends Context.Tag("@dogpile/AIExtractionService")<
+  AIExtractionService,
+  {
+    readonly extractFromText: (text: string) => Effect.Effect<TextExtractionResult, ExtractionError>
+    readonly extractFromPhoto: (photoUrl: string) => Effect.Effect<PhotoExtractionResult, ExtractionError>
+    readonly extractFromPhotos: (
+      photoUrls: readonly string[]
+    ) => Effect.Effect<PhotoExtractionResult, ExtractionError>
   }
-}
-
-export interface AIExtractionService {
-  readonly extractFromText: (text: string) => Effect.Effect<TextExtractionResult, ExtractionError>
-  readonly extractFromPhoto: (photoUrl: string) => Effect.Effect<PhotoExtractionResult, ExtractionError>
-  readonly extractFromPhotos: (photoUrls: readonly string[]) => Effect.Effect<PhotoExtractionResult, ExtractionError>
-}
-
-export const AIExtractionService = Context.GenericTag<AIExtractionService>("@dogpile/AIExtractionService")
-
-export const makeAIExtractionService = (
-  impl: AIExtractionService
-): Layer.Layer<AIExtractionService> =>
-  Layer.succeed(AIExtractionService, impl)
+>() {}

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Effect, Console, Exit, Cause, Layer, Queue, Fiber, Chunk, Schedule, Option } from "effect"
+import { Schema } from "effect"
 import { FetchHttpClient } from "@effect/platform"
 import { getAdapter, listAdapters } from "./registry.js"
 import type { RawDogData } from "./adapter.js"
@@ -10,6 +11,22 @@ import { join } from "node:path"
 import sharp from "sharp"
 
 
+class R2Error extends Schema.TaggedError<R2Error>()("R2Error", {
+  operation: Schema.String,
+  key: Schema.String,
+  message: Schema.String,
+}) {}
+
+class DatabaseError extends Schema.TaggedError<DatabaseError>()("DatabaseError", {
+  operation: Schema.String,
+  cause: Schema.Defect,
+}) {}
+
+class CliError extends Schema.TaggedError<CliError>()("CliError", {
+  command: Schema.String,
+  message: Schema.String,
+}) {}
+
 // Photo key format: "generated/{fingerprint}-{type}" where type is "professional" or "nose"
 // R2 stores: "{fingerprint}-{type}-{size}.webp" where size is "sm" or "lg"
 // Frontend appends "-{size}.webp" when constructing URLs
@@ -17,17 +34,12 @@ const toPhotoKey = (baseKey: string): string => `generated/${baseKey}`
 
 // Import core services
 import {
-  OpenRouterClientLive,
-  TextExtractorLive,
+  OpenRouterClient,
   TextExtractor,
-  PhotoAnalyzerLive,
   PhotoAnalyzer,
-  DescriptionGeneratorLive,
   DescriptionGenerator,
   EmbeddingService,
-  EmbeddingServiceLive,
   ImageGenerator,
-  ImageGeneratorLive,
 } from "@dogpile/core/services"
 
 interface ParsedArgs {
@@ -136,11 +148,11 @@ const execSql = (sql: string) =>
     try: async () => {
       const result = await $`wrangler d1 execute dogpile-db --local --config ../../apps/api/wrangler.toml --command ${sql}`.quiet()
       if (result.exitCode !== 0) {
-        throw new Error(`D1 execute failed: ${result.stderr.toString()}`)
+        throw new DatabaseError({ operation: "execute", cause: result.stderr.toString() })
       }
       return result
     },
-    catch: (e) => new Error(`SQL failed: ${e}`)
+    catch: (e) => (e instanceof DatabaseError ? e : new DatabaseError({ operation: "execute", cause: e }))
   })
 
 const deleteFromR2 = (baseKey: string) =>
@@ -190,11 +202,11 @@ const uploadToR2WithOptimization = (base64Data: string, baseKey: string) =>
 
         const smResult = await $`wrangler r2 object put ${smKey} --file ${tmpSm} --content-type image/webp --config ../../apps/api/wrangler.toml`.nothrow()
         if (smResult.exitCode !== 0) {
-          throw new Error(`R2 sm upload failed: ${smResult.stderr.toString()}`)
+          throw new R2Error({ operation: "upload-sm", key: smKey, message: smResult.stderr.toString() })
         }
         const lgResult = await $`wrangler r2 object put ${lgKey} --file ${tmpLg} --content-type image/webp --config ../../apps/api/wrangler.toml`.nothrow()
         if (lgResult.exitCode !== 0) {
-          throw new Error(`R2 lg upload failed: ${lgResult.stderr.toString()}`)
+          throw new R2Error({ operation: "upload-lg", key: lgKey, message: lgResult.stderr.toString() })
         }
 
         unlinkSync(tmpSm)
@@ -202,14 +214,14 @@ const uploadToR2WithOptimization = (base64Data: string, baseKey: string) =>
 
         return baseKey
       },
-      catch: (e) => new Error(`R2 upload failed: ${e}`)
+      catch: (e) => (e instanceof R2Error ? e : new R2Error({ operation: "upload", key: baseKey, message: String(e) }))
     })
 
 
     // Verify upload succeeded by checking object exists
     const exists = yield* verifyR2ObjectExists(uploaded)
     if (!exists) {
-      return yield* Effect.fail(new Error(`R2 verification failed: object ${uploaded} not found after upload`))
+      return yield* Effect.fail(new R2Error({ operation: "verify", key: uploaded, message: "object not found after upload" }))
     }
 
     return uploaded
@@ -522,7 +534,7 @@ const photosStatusCommand = Effect.gen(function* () {
       const proc = await $`wrangler d1 execute dogpile-db --local --config ../../apps/api/wrangler.toml --json --command "SELECT COUNT(*) as total, SUM(CASE WHEN photos_generated != '[]' AND photos_generated IS NOT NULL THEN 1 ELSE 0 END) as with_photos FROM dogs"`.quiet()
       return JSON.parse(proc.stdout.toString())
     },
-    catch: (e) => new Error(`DB query failed: ${e}`)
+    catch: (e) => (e instanceof DatabaseError ? e : new DatabaseError({ operation: "status", cause: e }))
   })
   const row = result[0]?.results?.[0]
   if (!row) { yield* Console.error("Could not fetch stats"); return }
@@ -541,7 +553,7 @@ const photosResetCommand = Effect.gen(function* () {
       const proc = await $`wrangler d1 execute dogpile-db --local --config ../../apps/api/wrangler.toml --json --command "SELECT id, name, fingerprint, photos_generated FROM dogs WHERE photos_generated != '[]' AND photos_generated IS NOT NULL"`.quiet()
       return JSON.parse(proc.stdout.toString())
     },
-    catch: (e) => new Error(`DB query failed: ${e}`)
+    catch: (e) => (e instanceof DatabaseError ? e : new DatabaseError({ operation: "reset-list", cause: e }))
   })
   const dogs = result[0]?.results ?? []
   
@@ -594,7 +606,7 @@ const photosGenerateCommand = Effect.gen(function* () {
       const proc = await $`wrangler d1 execute dogpile-db --local --config ../../apps/api/wrangler.toml --json --command "${query}"`.quiet()
       return JSON.parse(proc.stdout.toString())
     },
-    catch: (e) => new Error(`DB query failed: ${e}`)
+    catch: (e) => (e instanceof DatabaseError ? e : new DatabaseError({ operation: "generate-list", cause: e }))
   })
   const dogs = result[0]?.results ?? []
   if (dogs.length === 0) { yield* Console.log("✅ Nothing to do."); return }
@@ -668,12 +680,12 @@ const photosGenerateCommand = Effect.gen(function* () {
 
 // Build layers
 const AILayer = Layer.mergeAll(
-  TextExtractorLive,
-  PhotoAnalyzerLive,
-  DescriptionGeneratorLive,
-  EmbeddingServiceLive,
-  ImageGeneratorLive
-).pipe(Layer.provide(OpenRouterClientLive))
+  TextExtractor.Live,
+  PhotoAnalyzer.Live,
+  DescriptionGenerator.Live,
+  EmbeddingService.Live,
+  ImageGenerator.Live
+).pipe(Layer.provide(OpenRouterClient.Live))
 
 const program = Effect.gen(function* () {
   if (!command || command === "help" || command === "--help") {

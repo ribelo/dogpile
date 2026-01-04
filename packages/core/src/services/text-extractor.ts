@@ -9,67 +9,80 @@ import { ExtractionError } from "./ai-extraction.js"
 import promptTemplate from "../../prompts/text-extraction.md" with { type: "text" }
 import type { ChatMessage } from "./openrouter/types.js"
 
-export interface TextExtractor {
-  readonly extract: (
-    rawDescription: string,
-    shelterContext?: { name: string; city: string }
-  ) => Effect.Effect<TextExtraction, ExtractionError>
-}
-
-export const TextExtractor = Context.GenericTag<TextExtractor>("@dogpile/TextExtractor")
-
-export const TextExtractorLive = Layer.effect(
+export class TextExtractor extends Context.Tag("@dogpile/TextExtractor")<
   TextExtractor,
-  Effect.gen(function* () {
-    const client = yield* OpenRouterClient
-    const config = yield* aiConfig
+  {
+    readonly extract: (
+      rawDescription: string,
+      shelterContext?: { name: string; city: string }
+    ) => Effect.Effect<TextExtraction, ExtractionError>
+  }
+>() {
+  static readonly Live = Layer.effect(
+    this,
+    Effect.gen(function* () {
+      const client = yield* OpenRouterClient
+      const config = yield* aiConfig
 
-    return {
-      extract: (rawDescription: string, shelterContext?: { name: string; city: string }) =>
-        Effect.gen(function* () {
-          const prompt = promptTemplate
-            .replaceAll("{{RAW_DESCRIPTION}}", () => rawDescription)
-            .replaceAll("{{BREED_LIST}}", () => BREEDS.join(", "))
-            .replaceAll("{{SHELTER_NAME}}", () => shelterContext?.name ?? "nieznane")
-            .replaceAll("{{SHELTER_CITY}}", () => shelterContext?.city ?? "nieznane")
+      return {
+        extract: Effect.fn("TextExtractor.extract")(function* (
+          rawDescription: string,
+          shelterContext?: { name: string; city: string }
+        ) {
+            const prompt = promptTemplate
+              .replaceAll("{{RAW_DESCRIPTION}}", () => rawDescription)
+              .replaceAll("{{BREED_LIST}}", () => BREEDS.join(", "))
+              .replaceAll("{{SHELTER_NAME}}", () => shelterContext?.name ?? "nieznane")
+              .replaceAll("{{SHELTER_CITY}}", () => shelterContext?.city ?? "nieznane")
 
-          const messages: ChatMessage[] = [
-            { role: "system", content: "Extract structured data from the adoption listing. Return valid JSON only." },
-            { role: "user", content: prompt },
-          ]
-
-          const response = yield* client.chatCompletions({
-            model: config.textExtractionModel,
-            messages,
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "text_extraction",
-                strict: true,
-                schema: toJsonSchema(TextExtractionSchema),
+            const messages: ChatMessage[] = [
+              {
+                role: "system",
+                content: "Extract structured data from the adoption listing. Return valid JSON only.",
               },
-            },
-          }).pipe(
-            Effect.mapError((e) => new ExtractionError("text", e, String(e)))
-          )
+              { role: "user", content: prompt },
+            ]
 
-          const textContent = response.choices[0]?.message?.content
-          if (!textContent) {
-            return yield* Effect.fail(new ExtractionError("text", null, "No text in response"))
-          }
+            const response = yield* client
+              .chatCompletions({
+                model: config.textExtractionModel,
+                messages,
+                response_format: {
+                  type: "json_schema",
+                  json_schema: {
+                    name: "text_extraction",
+                    strict: true,
+                    schema: toJsonSchema(TextExtractionSchema),
+                  },
+                },
+              })
+              .pipe(
+                Effect.mapError((e) => new ExtractionError({ source: "text", cause: e, message: String(e) }))
+              )
 
-  const stripMarkdown = (s: string): string =>
-    s.replace(/^\s*```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim()
+            const textContent = response.choices[0]?.message?.content
+            if (!textContent) {
+              return yield* Effect.fail(
+                new ExtractionError({ source: "text", cause: null, message: "No text in response" })
+              )
+            }
 
-          const json = yield* Effect.try({
-            try: () => JSON.parse(stripMarkdown(textContent)),
-            catch: (e) => new ExtractionError("text", e, "Failed to parse JSON response"),
-          })
+            const stripMarkdown = (s: string): string =>
+              s.replace(/^\s*```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim()
 
-          return yield* Schema.decodeUnknown(TextExtractionSchema)(json).pipe(
-            Effect.mapError((e) => new ExtractionError("text", e, "Validation failed"))
-          )
-        }),
-    }
-  })
-)
+            const json = yield* Effect.try({
+              try: () => JSON.parse(stripMarkdown(textContent)),
+              catch: (e) =>
+                new ExtractionError({ source: "text", cause: e, message: "Failed to parse JSON response" }),
+            })
+
+            return yield* Schema.decodeUnknown(TextExtractionSchema)(json).pipe(
+              Effect.mapError((e) =>
+                new ExtractionError({ source: "text", cause: e, message: "Validation failed" })
+              )
+            )
+          }),
+      }
+    })
+  )
+}

@@ -9,14 +9,14 @@ import { writeFileSync, unlinkSync, mkdirSync, readdirSync, rmSync } from "node:
 import { tmpdir } from "node:os"
 import {
   ImageGenerator,
-  ImageGeneratorLive,
-  OpenRouterClientLive,
+  OpenRouterClient,
   RateLimitError,
   NetworkError,
   OpenRouterError,
 } from "@dogpile/core/services"
 import { aiConfig, type AIConfig } from "@dogpile/core/config/ai"
 import { FetchHttpClient } from "@effect/platform"
+import { R2Error, SharpError, UnrecoverableError } from "../errors"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, "../../../..")
@@ -40,21 +40,21 @@ const isUnrecoverableError = (error: unknown): { stop: boolean; reason: string }
   return null
 }
 
-const findLocalDb = (): string => {
+const findLocalDb = () => Effect.gen(function* () {
   const pattern = path.join(REPO_ROOT, "apps/api/.wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite")
   const paths = globSync(pattern)
   const dbPaths = paths.filter(p => !p.endsWith("-shm") && !p.endsWith("-wal"))
   if (dbPaths.length === 0) {
-    throw new Error("Local SQLite DB not found. Run 'wrangler d1 migrations apply dogpile-db --local' in apps/api first.")
+    return yield* new UnrecoverableError({ reason: "Local SQLite DB not found. Run 'wrangler d1 migrations apply dogpile-db --local' in apps/api first." })
   }
   return dbPaths[0]
-}
+})
 
 const R2_GENERATED_BLOBS_PATH = path.join(REPO_ROOT, "apps/api/.wrangler/state/v3/r2/dogpile-generated/blobs")
 
 const statusCommand = Command.make("status", {}, () =>
   Effect.gen(function* () {
-    const dbPath = findLocalDb()
+    const dbPath = yield* findLocalDb()
     const db = new Database(dbPath, { readonly: true })
 
     const stats = db.query(`
@@ -87,7 +87,7 @@ const statusCommand = Command.make("status", {}, () =>
 
 const clearCommand = Command.make("clear", {}, () =>
   Effect.gen(function* () {
-    const dbPath = findLocalDb()
+    const dbPath = yield* findLocalDb()
     const db = new Database(dbPath)
 
     const result = db.run("UPDATE dogs SET photos_generated = '[]'")
@@ -128,7 +128,7 @@ const uploadToR2 = (sharp: any, base64Data: string, fingerprint: string, type: "
           .resize(size.width, size.height, { fit: "cover" })
           .webp({ quality: 85 })
           .toBuffer(),
-        catch: (e) => new Error(`Sharp failed: ${e}`)
+        catch: (e) => new SharpError({ operation: "resize/webp", cause: e })
       })
 
       const tmpPath = path.join(tmpdir(), `dogpile-${Date.now()}-${size.name}.webp`)
@@ -140,10 +140,10 @@ const uploadToR2 = (sharp: any, base64Data: string, fingerprint: string, type: "
         try: async () => {
           const result = await $`wrangler r2 object put ${r2Key} --file ${tmpPath} --content-type image/webp --config ${CONFIG_PATH} --local`.quiet()
           if (result.exitCode !== 0) {
-            throw new Error(`R2 upload failed: ${result.stderr.toString()}`)
+            throw new R2Error({ operation: "put", message: result.stderr.toString() })
           }
         },
-        catch: (e) => new Error(`Wrangler R2 failed: ${e}`)
+        catch: (e) => e instanceof R2Error ? e : new R2Error({ operation: "put", message: String(e), cause: e })
       })
 
       unlinkSync(tmpPath)
@@ -158,7 +158,7 @@ const generateCommand = Command.make("generate", {
 }, ({ concurrency, limit }) =>
   Effect.gen(function* () {
     const sharp = (yield* Effect.tryPromise(() => import("sharp"))).default
-    const dbPath = findLocalDb()
+    const dbPath = yield* findLocalDb()
     const db = new Database(dbPath)
 
     let query = "SELECT id, name, fingerprint, photos, generated_bio FROM dogs WHERE photos_generated = '[]' OR photos_generated IS NULL"
@@ -209,16 +209,18 @@ const generateCommand = Command.make("generate", {
               schedule: retrySchedule,
               while: (error) => isRetryableError(error),
             }),
-            Effect.catchAll((e) => {
-              const unrecoverable = isUnrecoverableError(e)
-              if (unrecoverable) {
-                // This will bubble up and stop the whole process
-                return Effect.fail(new Error(unrecoverable.reason))
-              }
-              return Console.log(`  ❌ Failed image generation for ${dog.name}: ${e.message}`).pipe(
-                Effect.map(() => null)
-              )
-           })
+            Effect.catchAll((e) => 
+              Effect.gen(function* () {
+                const unrecoverable = isUnrecoverableError(e)
+                if (unrecoverable) {
+                  // This will bubble up and stop the whole process
+                  return yield* new UnrecoverableError({ reason: unrecoverable.reason })
+                }
+                const message = e instanceof Error ? e.message : String(e)
+                yield* Console.log(`  ❌ Failed image generation for ${dog.name}: ${message}`)
+                return null
+              })
+            )
          )
 
         if (!result) {
@@ -231,7 +233,8 @@ const generateCommand = Command.make("generate", {
         if (result.professional) {
           const key = yield* uploadToR2(sharp, result.professional.base64Url, dog.fingerprint, "professional").pipe(
             Effect.catchAll(e => {
-               return Console.log(`  ❌ Failed professional upload for ${dog.name}: ${e.message}`).pipe(Effect.map(() => null))
+               const message = e instanceof Error ? e.message : String(e)
+               return Console.log(`  ❌ Failed professional upload for ${dog.name}: ${message}`).pipe(Effect.map(() => null))
             })
           )
           if (key) generatedKeys.push(key)
@@ -240,7 +243,8 @@ const generateCommand = Command.make("generate", {
         if (result.funNose) {
           const key = yield* uploadToR2(sharp, result.funNose.base64Url, dog.fingerprint, "nose").pipe(
             Effect.catchAll(e => {
-               return Console.log(`  ❌ Failed nose upload for ${dog.name}: ${e.message}`).pipe(Effect.map(() => null))
+               const message = e instanceof Error ? e.message : String(e)
+               return Console.log(`  ❌ Failed nose upload for ${dog.name}: ${message}`).pipe(Effect.map(() => null))
             })
           )
           if (key) generatedKeys.push(key)
@@ -257,9 +261,15 @@ const generateCommand = Command.make("generate", {
     db.close()
     yield* Console.log("\n✨ Photo generation complete.\n")
   }).pipe(
-    Effect.provide(ImageGeneratorLive),
-    Effect.provide(OpenRouterClientLive),
-    Effect.provide(FetchHttpClient.layer)
+    Effect.provide(
+      Layer.provide(ImageGenerator.Live, OpenRouterClient.Live).pipe(
+        Layer.merge(FetchHttpClient.layer)
+      )
+    ),
+    Effect.mapError(e => {
+      if (e instanceof UnrecoverableError) return e
+      return new UnrecoverableError({ reason: String(e) })
+    })
   )
 )
 

@@ -1,29 +1,29 @@
-import { Data } from "effect"
+import { Schema } from "effect"
 
-export class ScrapeError extends Data.TaggedError("ScrapeError")<{
-  readonly shelterId: string
-  readonly cause: unknown
-  readonly message: string
-}> {}
+export class ScrapeError extends Schema.TaggedError<ScrapeError>()("ScrapeError", {
+  shelterId: Schema.String,
+  cause: Schema.Unknown,
+  message: Schema.String,
+}) {}
 
-export class ParseError extends Data.TaggedError("ParseError")<{
-  readonly shelterId: string
-  readonly cause: unknown
-  readonly message: string
-}> {}
+export class ParseError extends Schema.TaggedError<ParseError>()("ParseError", {
+  shelterId: Schema.String,
+  cause: Schema.Unknown,
+  message: Schema.String,
+}) {}
 
-export class EmbeddingError extends Data.TaggedError("EmbeddingError")<{
-  readonly cause: unknown
-  readonly message: string
-}> {}
+export class EmbeddingError extends Schema.TaggedError<EmbeddingError>()("EmbeddingError", {
+  cause: Schema.Unknown,
+  message: Schema.String,
+}) {}
 
-export class StorageError extends Data.TaggedError("StorageError")<{
-  readonly operation: "read" | "write" | "delete"
-  readonly cause: unknown
-  readonly message: string
-}> {}
+export class StorageError extends Schema.TaggedError<StorageError>()("StorageError", {
+  operation: Schema.Literal("read", "write", "delete"),
+  cause: Schema.Unknown,
+  message: Schema.String,
+}) {}
 
-export class NotFoundError extends Data.TaggedError("NotFoundError")<{
-  readonly entity: string
-  readonly id: string
-}> {}
+export class NotFoundError extends Schema.TaggedError<NotFoundError>()("NotFoundError", {
+  entity: Schema.String,
+  id: Schema.String,
+}) {}

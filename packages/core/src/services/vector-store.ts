@@ -14,9 +14,16 @@ export interface VectorStore {
   readonly query: (vector: readonly number[], topK: number) => Effect.Effect<readonly VectorSearchResult[], StorageError>
 }
 
-export const VectorStore = Context.GenericTag<VectorStore>("@dogpile/VectorStore")
-
-export const makeVectorStore = (
-  impl: VectorStore
-): Layer.Layer<VectorStore> =>
-  Layer.succeed(VectorStore, impl)
+export class VectorStore extends Context.Tag("@dogpile/VectorStore")<
+  VectorStore,
+  {
+    readonly upsert: (id: string, vector: readonly number[], metadata?: Record<string, unknown>) => Effect.Effect<void, StorageError>
+    readonly upsertBatch: (items: readonly { id: string; vector: readonly number[]; metadata?: Record<string, unknown> }[]) => Effect.Effect<void, StorageError>
+    readonly delete: (id: string) => Effect.Effect<void, StorageError>
+    readonly deleteBatch: (ids: readonly string[]) => Effect.Effect<void, StorageError>
+    readonly query: (vector: readonly number[], topK: number) => Effect.Effect<readonly VectorSearchResult[], StorageError>
+  }
+>() {
+  static readonly make = (impl: Context.Tag.Service<VectorStore>): Layer.Layer<VectorStore> =>
+    Layer.succeed(this, impl)
+}
