@@ -2,17 +2,17 @@
   "meta": {
     "task": "Professional Dog Portrait",
     "style_reference": "Studio ID Photo",
-    "critical_rules": "NO lighting equipment visible, NO light stands, NO softboxes, NO reflectors, NO studio props, NO background paper edges, NO floor visible, NO shadows from equipment. Only the dog and solid background color exist in the frame."
+    "short_description": "A clean, high-end professional corporate headshot of a dog for a CV profile. The dog looks reliable and friendly against a seamless, minimal studio background."
   },
   "subject": {
-    "description": "{{DOG_DESCRIPTION}}",
+    "dog_description": "{{DOG_DESCRIPTION}}",
     "positioning": {
       "framing": "medium close-up",
       "body_visible": "head, neck, and upper chest",
       "alignment": "centered",
-      "eye_contact": "looking directly at camera lens"
+      "eye_contact": "looking directly at camera lens, professional and attentive"
     },
-    "expression": "friendly, soft, approachable, slight smile or panting",
+    "expression": "friendly, intelligent, soft, approachable, closed mouth or slight calm panting",
     "focus": "sharp focus on eyes and nose"
   },
   "photography": {
@@ -39,17 +39,6 @@
     "color_name": "warm cream",
     "hex_code": "#fbf8f3",
     "details": "infinite solid color, no visible edges, no floor line, no horizon, no shadows on background, no paper seams, no wrinkles, completely uniform from edge to edge of frame",
-    "atmosphere": "warm, inviting, safe"
-  },
-  "exclusions": [
-    "NO lighting rigs or equipment",
-    "NO softboxes or light stands visible",
-    "NO background paper edges or seams",
-    "NO floor or ground visible",
-    "NO props or objects of any kind",
-    "NO collars or leashes",
-    "NO human hands or body parts",
-    "NO shadows from equipment on background",
-    "NO studio environment elements"
-  ]
+    "atmosphere": "warm, inviting, safe, professional"
+  }
 }

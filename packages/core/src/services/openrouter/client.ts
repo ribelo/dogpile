@@ -50,7 +50,7 @@ export const OpenRouterClientLive = Layer.effect(
               "Content-Type": "application/json",
               "HTTP-Referer": "https://dogpile.extropy.club",
             },
-            body: JSON.stringify(body),
+            body: JSON.stringify(body, null, 2),
             signal,
           })
           return res

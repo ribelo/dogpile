@@ -1,58 +1,41 @@
 {
   "meta": {
-    "task": "Fun Dog Portrait",
-    "style_reference": "Wide Angle Pet Photography",
-    "effect": "Big Nose / Fisheye",
-    "critical_rules": "NO lighting equipment visible, NO light stands, NO softboxes, NO reflectors, NO studio props, NO background paper edges, NO floor visible. Only the dog and solid background color exist in the frame."
+    "task": "Quirky Wide-Angle Dog Portrait",
+    "style_reference": "Fisheye Pet Photography",
+    "short_description": "A playful, extreme close-up 'nose-first' portrait of a dog. Using a fisheye lens to create a comical 'big nose' effect, the dog appears to be sniffing the camera lens against a clean, minimalist background."
   },
   "subject": {
-    "description": "{{DOG_DESCRIPTION}}",
+    "dog_description": "{{DOG_DESCRIPTION}}",
     "positioning": {
-      "framing": "extreme close-up selfie style",
-      "body_visible": "face dominant, body receding into background",
-      "alignment": "centered",
-      "eye_contact": "looking deeply into the lens",
-      "focus_point": "snout and nose"
+      "framing": "extreme close-up, wide-angle distortion",
+      "body_visible": "nose and snout dominant, head and body receding rapidly into the distance",
+      "alignment": "nose centered and closest to lens",
+      "eye_contact": "looking directly into the lens with wide, curious eyes"
     },
-    "expression": "curious, goofy, sniffing the camera, adorable puppy eyes",
-    "focus": "nose is sharp and enlarged, ears might be slightly soft focus"
+    "expression": "goofy, curious, 'boopable' snout, playful energy",
+    "focus": "razor-sharp focus on the wet texture of the nose, soft bokeh on the ears and body"
   },
   "photography": {
     "camera_gear": {
       "type": "High-end DSLR",
-      "lens": "10mm ultra-wide fisheye lens",
-      "perspective": "forced perspective, exaggerated snout size",
-      "aperture": "f/2.8"
+      "lens": "8mm - 14mm ultra-wide fisheye lens",
+      "perspective": "extreme forced perspective, exaggerated snout-to-head ratio"
     },
     "lighting": {
       "setup": "invisible high-key studio lighting",
-      "key_light": "large softbox centered above camera, NOT visible in frame",
-      "fill_light": "ample fill to illuminate the nose texture",
-      "catchlights": "bright reflection in eyes",
-      "shadows": "very minimal"
+      "details": "bright, even illumination to highlight nose texture and whiskers, vibrant catchlights in eyes",
+      "shadows": "virtually shadowless, clean and bright"
     },
     "texture": {
-      "quality": "highly detailed wet nose texture",
-      "finish": "playful, vibrant",
-      "artifacts": "none"
+      "quality": "hyper-detailed wet nose leather, fine whiskers, glossy eyes",
+      "finish": "vibrant, high-contrast, playful commercial look"
     }
   },
   "background": {
     "type": "infinite seamless backdrop",
     "color_name": "warm cream",
     "hex_code": "#fbf8f3",
-    "details": "infinite solid color, no visible edges, no floor line, completely blurred due to depth of field, uniform from edge to edge of frame",
-    "atmosphere": "fun, energetic, quirky"
-  },
-  "exclusions": [
-    "NO lighting rigs or equipment",
-    "NO softboxes or light stands visible",
-    "NO background paper edges or seams",
-    "NO floor or ground visible",
-    "NO props or objects of any kind",
-    "NO collars or leashes",
-    "NO human hands or body parts",
-    "NO shadows from equipment on background",
-    "NO studio environment elements"
-  ]
+    "details": "pure solid color, zero depth, no floor/wall transition, no paper seams, no equipment visible",
+    "atmosphere": "energetic, fun, minimalist"
+  }
 }

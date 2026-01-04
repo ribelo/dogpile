@@ -4,6 +4,7 @@ import { aiConfig } from "../config/ai.js"
 import type { ChatMessage, ChatCompletionsResult } from "./openrouter/types.js"
 import professionalPromptTemplate from "../../prompts/image-professional.json"
 import funNosePromptTemplate from "../../prompts/image-fun-nose.json"
+import { OpenRouterError, RateLimitError, NetworkError } from "./openrouter/errors.js"
 
 export interface GeneratedPhoto {
   readonly base64Url: string
@@ -22,7 +23,7 @@ export interface GeneratePhotosInput {
 export interface ImageGenerator {
   readonly generatePhotos: (
     input: GeneratePhotosInput
-  ) => Effect.Effect<ImageGeneratorOutput | null, Error>
+  ) => Effect.Effect<ImageGeneratorOutput | null, OpenRouterError | RateLimitError | NetworkError>
 }
 
 export const ImageGenerator = Context.GenericTag<ImageGenerator>(
@@ -31,7 +32,7 @@ export const ImageGenerator = Context.GenericTag<ImageGenerator>(
 
 const buildPrompt = (template: typeof professionalPromptTemplate, dogDescription: string): string => {
   const prompt = JSON.parse(JSON.stringify(template))
-  prompt.subject.description = dogDescription
+  prompt.subject.dog_description = dogDescription
   return JSON.stringify(prompt)
 }
 
@@ -47,7 +48,7 @@ export const ImageGeneratorLive = Layer.effect(
           const professionalPrompt = buildPrompt(professionalPromptTemplate, input.dogDescription)
           const funNosePrompt = buildPrompt(funNosePromptTemplate, input.dogDescription)
 
-          const generateSinglePhoto = (prompt: string): Effect.Effect<GeneratedPhoto | null, never, never> =>
+          const generateSinglePhoto = (prompt: string): Effect.Effect<GeneratedPhoto | null, OpenRouterError | RateLimitError | NetworkError> =>
             Effect.gen(function* () {
               const messageContent: ChatMessage["content"] = input.referencePhotoUrl
                 ? [
@@ -65,7 +66,7 @@ export const ImageGeneratorLive = Layer.effect(
                   ]
                 : prompt
 
-              const result: ChatCompletionsResult | null = yield* client.chatCompletions({
+              const result: ChatCompletionsResult = yield* client.chatCompletions({
                 model: config.imageGenerationModel,
                 messages: [
                   {
@@ -77,14 +78,9 @@ export const ImageGeneratorLive = Layer.effect(
                 image_config: {
                   aspect_ratio: "4:5",
                 },
-              }).pipe(
-                Effect.catchAll((e) => {
-                  console.error(`Image generation API error: ${e}`)
-                  return Effect.succeed(null as ChatCompletionsResult | null)
-                })
-              )
+              })
 
-              if (!result || !result.choices || result.choices.length === 0) {
+              if (!result.choices || result.choices.length === 0) {
                 return null
               }
 
@@ -94,12 +90,7 @@ export const ImageGeneratorLive = Layer.effect(
               }
 
               return { base64Url: image }
-            }).pipe(
-              Effect.catchAll((e) => {
-                console.error(`generateSinglePhoto error: ${e}`)
-                return Effect.succeed(null)
-              })
-            )
+            })
 
           const [professional, funNose] = yield* Effect.all([
             generateSinglePhoto(professionalPrompt),
