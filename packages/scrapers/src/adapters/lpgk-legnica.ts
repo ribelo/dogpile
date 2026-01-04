@@ -113,7 +113,7 @@ export const lpgkLegnicaAdapter = createAdapter({
       name: raw.name,
       sex: raw.sex ?? "unknown",
       rawDescription: raw.rawDescription,
-      sourceUrl: raw.sourceUrl ?? SOURCE_URL,
+      sourceUrl: raw.sourceUrl ?? null,
       photos: raw.photos ?? [],
     }),
 })
