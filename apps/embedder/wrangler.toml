@@ -11,10 +11,9 @@ max_retries = 3
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "dogpile-dogs"
-remote = true
 
 [vars]
-OPENROUTER_MODEL = "google/gemini-embedding-001"
+OPENROUTER_MODEL = "google/text-embedding-004"  # 768 dimensions
 
 [secrets]
 # OPENROUTER_API_KEY - set via wrangler secret put

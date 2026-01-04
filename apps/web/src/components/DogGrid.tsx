@@ -83,7 +83,7 @@ export default function DogGrid(props: DogGridProps) {
     <section id="dogs" class="py-8">
       <Switch>
         <Match when={dogs.loading}>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 card-grid">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 card-grid">
             <For each={Array(6).fill(0)}>{() => <SkeletonCard />}</For>
           </div>
         </Match>
@@ -96,7 +96,7 @@ export default function DogGrid(props: DogGridProps) {
 
         <Match when={dogs()}>
           <Show when={dogs()!.length > 0} fallback={<EmptyState />}>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 card-grid">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 card-grid">
               <For each={dogs()}>
                 {(dog) => <DogCard dog={dog} />}
               </For>

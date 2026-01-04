@@ -14,6 +14,7 @@
     "title": "Podążaj za nosem",
     "subtitle": "Znajdźmy tego, który na ciebie czeka",
     "location": "Lokalizacja",
+    "sex": "Płeć",
     "size": "Rozmiar",
     "age": "Wiek",
     "vibe": "Charakter",
@@ -27,6 +28,8 @@
     "pocketSized": "Kieszonkowy",
     "armful": "Naręcze",
     "bigBear": "Wielki miś",
+    "male": "Samiec",
+    "female": "Samica",
     "startSniffing": "Zacznij niuchać",
     "puppies": "Szczeniaki",
     "small": "Małe",
@@ -81,6 +84,9 @@
     "chipped": "Zaczipowany",
     "story": "Historia",
     "contact": "Skontaktuj się ze schroniskiem",
-    "visitShelter": "Odwiedź stronę schroniska"
+    "visitShelter": "Odwiedź stronę schroniska",
+    "urgent": "PILNE!",
+    "tagline": "Szuka miękkiego miejsca do lądowania",
+    "vibeCheck": "Vibe Check"
   }
 }

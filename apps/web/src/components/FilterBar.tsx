@@ -1,50 +1,62 @@
-import { createSignal, For } from "solid-js"
+import { createSignal, For, createEffect, onCleanup } from "solid-js"
 import { t } from "../i18n"
 import type { DogFilters } from "./DogGrid"
-
-// TODO: Fetch cities dynamically from API /dogs/cities endpoint
-const cities = [
-  "Warszawa",
-  "Kraków",
-  "Gdańsk",
-  "Wrocław",
-  "Legnica",
-  "Jawor",
-]
+import MobileFilterSheet from "./MobileFilterSheet"
+import { CITIES } from "../constants/filters"
 
 interface FilterBarProps {
   onFilter?: (filters: DogFilters) => void
 }
 
-export default function FilterBar(props: FilterBarProps) {
+export default function FilterBar(_props: FilterBarProps) {
   const [city, setCity] = createSignal("")
   const [size, setSize] = createSignal("")
   const [sex, setSex] = createSignal("")
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = createSignal(false)
+  const [isStuck, setIsStuck] = createSignal(false)
+
+  createEffect(() => {
+    const handleScroll = () => {
+      setIsStuck(window.scrollY > 200)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    onCleanup(() => window.removeEventListener('scroll', handleScroll))
+  })
 
   const handleSearch = (e: Event) => {
     e.preventDefault()
-    const filters = {
-       city: city() || undefined,
-       size: size() || undefined,
-       sex: sex() || undefined,
-     }
-    if (props.onFilter) {
-      props.onFilter(filters)
-    } else {
-      const event = new CustomEvent('dog-filters-changed', { detail: filters });
-      window.dispatchEvent(event);
+    const detail = {
+      city: city() || undefined,
+      size: size() || undefined,
+      sex: sex() || undefined,
     }
+    window.dispatchEvent(new CustomEvent('dog-filters-changed', { detail }))
   }
 
   return (
-    <section class="max-w-6xl mx-auto px-4 mb-24 relative z-10">
-      <div class="bg-sys-paper-card p-8 paper-edge shadow-sm border border-sys-paper-shadow">
-        <div class="flex items-end gap-4 mb-6">
-          <h2 class="font-title text-3xl font-bold text-sys-ink-primary">{t('filters.title')}</h2>
-          <p class="text-sys-ink-primary/60 pb-1 italic font-bold">{t('filters.subtitle')}</p>
+    <section class={`sticky top-0 z-40 transition-all duration-300 w-full ${isStuck() ? 'bg-sys-paper-base/95 backdrop-blur-sm shadow-lg py-4' : 'py-8 md:py-12'}`}>
+      <div class={`max-w-6xl mx-auto px-4 transition-all duration-300 ${isStuck() ? '' : 'mb-12 md:mb-24'}`}>
+        <div class={`bg-sys-paper-card paper-edge shadow-sm border border-sys-paper-shadow transition-all duration-300 ${isStuck() ? 'p-4 md:p-6' : 'p-6 md:p-8'}`}>
+          <div class={`flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 transition-all duration-300 ${isStuck() ? 'mb-4' : 'mb-6'}`}>
+            <div class="flex items-end gap-4">
+              <h2 class={`font-title font-bold text-sys-ink-primary transition-all duration-300 ${isStuck() ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'}`}>{t('filters.title')}</h2>
+              {!isStuck() && <p class="hidden sm:block text-sys-ink-primary/60 pb-1 italic font-bold">{t('filters.subtitle')}</p>}
+            </div>
+          </div>
+          <button 
+            onClick={() => setIsMobileSheetOpen(true)}
+            class="sm:hidden w-full flex items-center justify-between px-4 py-3 bg-sys-paper-base border-2 border-sys-paper-shadow rounded-xl font-bold text-sys-ink-primary"
+            type="button"
+          >
+            <span class="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+              {t('filters.title')}
+            </span>
+            <span class="text-sys-heart-core text-sm">{city() || size() || sex() ? 'Active' : ''}</span>
+          </button>
         </div>
 
-        <form onSubmit={handleSearch} class="grid md:grid-cols-4 gap-4">
+        <form onSubmit={handleSearch} class="hidden sm:grid md:grid-cols-4 gap-4">
           <div class="space-y-2">
             <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('filters.location')}</label>
             <div class="relative">
@@ -54,7 +66,7 @@ export default function FilterBar(props: FilterBarProps) {
                 class="w-full filter-input px-4 py-3 font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10"
               >
                 <option value="">{t('filters.anywhere')}</option>
-                <For each={cities}>
+                <For each={CITIES}>
                   {(city) => <option value={city}>{city}</option>}
                 </For>
               </select>
@@ -114,6 +126,11 @@ export default function FilterBar(props: FilterBarProps) {
           </div>
         </form>
       </div>
+
+      <MobileFilterSheet 
+        isOpen={isMobileSheetOpen()} 
+        onClose={() => setIsMobileSheetOpen(false)} 
+      />
     </section>
   )
 }

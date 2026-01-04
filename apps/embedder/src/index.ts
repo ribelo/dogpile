@@ -22,6 +22,13 @@ interface ReindexJob {
   type: "upsert" | "delete"
   dogId: string
   description?: string
+  metadata?: {
+    shelterId?: string
+    city?: string
+    size?: string
+    ageMonths?: number
+    sex?: string
+  }
 }
 
 export default {
@@ -81,7 +88,7 @@ export default {
         const vectors = upserts.map((m, i) => ({
           id: m.body.dogId,
           values: embeddings[i],
-          metadata: {},
+          metadata: m.body.metadata || {},
         }))
 
         yield* Effect.tryPromise({

@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { drizzle } from "drizzle-orm/d1"
 import { dogs, shelters, syncLogs } from "@dogpile/db"
-import { eq, desc, and, like, sql, SQL } from "drizzle-orm"
+import { eq, desc, and, like, sql, SQL, inArray } from "drizzle-orm"
 import { DatabaseError, R2Error, QueueError } from "./errors"
 
 interface Env {
@@ -11,13 +11,62 @@ interface Env {
   PHOTOS_GENERATED: R2Bucket
   VECTORIZE: VectorizeIndex
   OPENROUTER_API_KEY: string
+  OPENROUTER_MODEL: string
   ENVIRONMENT: string
   R2_PUBLIC_DOMAIN?: string
   IMAGE_QUEUE?: Queue<{ dogId: string; urls: string[] }>
+  REINDEX_QUEUE?: Queue<any>
   ADMIN_KEY?: string
 }
 
+/**
+ * TODO: Centralize ReindexJob type to avoid duplication
+ */
+interface ReindexJob {
+  type: "upsert" | "delete"
+  dogId: string
+  description?: string
+  metadata?: {
+    shelterId?: string
+    city?: string | undefined
+    size?: string
+    ageMonths?: number
+    sex?: string | undefined
+  }
+}
+
 type ApiError = DatabaseError | R2Error | QueueError
+
+function buildSearchText(dog: any): string {
+  const parts: string[] = [`Pies ${dog.name}`]
+  
+  if (dog.ageEstimate?.months) {
+    const months = dog.ageEstimate.months
+    if (months < 12) {
+      parts.push(`szczeniak ${months} miesięcy`)
+    } else {
+      const years = Math.floor(months / 12)
+      parts.push(`${years} ${years === 1 ? 'rok' : years < 5 ? 'lata' : 'lat'}`)
+    }
+  }
+  
+  if (dog.sizeEstimate?.value) {
+    const sizeMap: Record<string, string> = { small: "mały pies", medium: "średni pies", large: "duży pies" }
+    parts.push(sizeMap[dog.sizeEstimate.value] || dog.sizeEstimate.value)
+  }
+  
+  if (dog.breedEstimates?.length) {
+    parts.push(`rasa ${dog.breedEstimates[0].breed.replace(/_/g, " ")}`)
+  }
+  
+  if (dog.locationCity) parts.push(`z miasta ${dog.locationCity}`)
+  if (dog.sex === "male") parts.push("samiec")
+  if (dog.sex === "female") parts.push("samica")
+  if (dog.personalityTags?.length) parts.push(dog.personalityTags.join(", "))
+  if (dog.generatedBio) parts.push(dog.generatedBio)
+  
+  return parts.join(". ")
+}
 
 type RouteHandler = (
   request: Request,
@@ -104,6 +153,87 @@ const routes: Route[] = [
   },
   {
     method: "GET",
+    pattern: new URLPattern({ pathname: "/dogs/search" }),
+    handler: Effect.fn("api.searchDogs")(function* (req, env) {
+    const url = new URL(req.url)
+    const query = url.searchParams.get("q")
+    if (!query) {
+      return yield* json({ error: "Missing q parameter" }, 400)
+    }
+    
+    const city = url.searchParams.get("city")
+    const size = url.searchParams.get("size")
+    const sex = url.searchParams.get("sex")
+    const parsedLimit = parseInt(url.searchParams.get("limit") || "10")
+    const limit = Math.min(isNaN(parsedLimit) ? 10 : parsedLimit, 50)
+
+    // Get embedding for query
+    const embedding = yield* Effect.tryPromise({
+      try: async () => {
+        const response = await fetch("https://openrouter.ai/api/v1/embeddings", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: env.OPENROUTER_MODEL,
+            input: [query],
+          }),
+        })
+        const data = await response.json() as { data: [{ embedding: number[] }] }
+        return data.data[0].embedding
+      },
+      catch: (e) => new DatabaseError({ operation: "get embedding", cause: e })
+    })
+
+    // Build metadata filter
+    const filter: Record<string, string> = {}
+    if (city) filter.city = city
+    if (size) filter.size = size
+    if (sex) filter.sex = sex
+
+    // TODO: Add age range filtering when Vectorize supports numeric comparisons
+
+    // Search Vectorize
+    const results = yield* Effect.tryPromise({
+      try: () => {
+        const options: VectorizeQueryOptions = {
+          topK: limit,
+        }
+        if (Object.keys(filter).length > 0) {
+          options.filter = filter
+        }
+        return env.VECTORIZE.query(embedding, options)
+      },
+      catch: (e) => new DatabaseError({ operation: "vector search", cause: e })
+    })
+
+    // Hydrate from D1
+    const db = drizzle(env.DB)
+    const ids = results.matches.map(m => m.id)
+    
+    if (ids.length === 0) {
+      return yield* json({ dogs: [], scores: [] })
+    }
+
+    const dogResults = yield* Effect.tryPromise({
+      try: () => db.select().from(dogs).where(inArray(dogs.id, ids)).all(),
+      catch: (e) => new DatabaseError({ operation: "hydrate dogs", cause: e })
+    })
+
+    // Sort by vector score
+    const scoreMap = new Map(results.matches.map(m => [m.id, m.score]))
+    dogResults.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0))
+
+      return yield* json({
+        dogs: dogResults,
+        scores: dogResults.map(d => scoreMap.get(d.id) || 0)
+      })
+    }),
+  },
+  {
+    method: "GET",
     pattern: new URLPattern({ pathname: "/dogs/:id" }),
     handler: Effect.fn("api.getDog")(function* (_req, env, params) {
       const db = drizzle(env.DB)
@@ -130,42 +260,6 @@ const routes: Route[] = [
         catch: (e) => new DatabaseError({ operation: "listShelters", cause: e })
       })
       return yield* json({ shelters: results })
-    }),
-  },
-  {
-    method: "GET",
-    pattern: new URLPattern({ pathname: "/dogs/search" }),
-    handler: Effect.fn("api.searchDogs")(function* (req, env) {
-      const url = new URL(req.url)
-      const query = url.searchParams.get("q")
-      if (!query) {
-        return yield* json({ error: "Missing q parameter" }, 400)
-      }
-
-      const statusParam = url.searchParams.get("status")
-      const validStatuses = ["available", "adopted", "removed", "reserved"]
-      const statusFilter = statusParam === "all" ? undefined : 
-        (validStatuses.includes(statusParam ?? "") ? statusParam : "available")
-
-      const db = drizzle(env.DB)
-      
-      const filters: SQL[] = [like(dogs.generatedBio, `%${query}%`)]
-      if (statusFilter) {
-        filters.push(eq(dogs.status, statusFilter as any))
-      }
-
-      const results = yield* Effect.tryPromise({
-        try: () =>
-          db
-            .select()
-            .from(dogs)
-            .where(and(...filters))
-            .limit(10)
-            .all(),
-        catch: (e) => new DatabaseError({ operation: "searchDogs", cause: e })
-      })
-
-      return yield* json({ dogs: results, scores: results.map(() => 1.0) })
     }),
   },
   {
@@ -284,6 +378,59 @@ const routes: Route[] = [
      })
    }),
  },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/admin/reindex" }),
+    handler: Effect.fn("api.reindex")(function* (req, env) {
+      const authHeader = req.headers.get("Authorization")
+      if (authHeader !== `Bearer ${env.ADMIN_KEY}`) {
+        return yield* json({ error: "Unauthorized" }, 401)
+      }
+
+      if (!env.REINDEX_QUEUE) {
+        return yield* json({ error: "REINDEX_QUEUE not configured" }, 500)
+      }
+
+      const url = new URL(req.url)
+      const parsedLimit = parseInt(url.searchParams.get("limit") || "10000")
+      const limit = Math.min(isNaN(parsedLimit) ? 10000 : parsedLimit, 10000)
+
+      const db = drizzle(env.DB)
+      const allDogs = yield* Effect.tryPromise({
+        try: () => db.select().from(dogs).where(eq(dogs.status, "available")).limit(limit).all(),
+        catch: (e) => new DatabaseError({ operation: "fetch all dogs", cause: e })
+      })
+
+      // Queue reindex jobs in batches
+      const jobs: { body: ReindexJob }[] = allDogs.map(dog => {
+        return {
+          body: {
+            type: "upsert" as const,
+            dogId: dog.id,
+            description: buildSearchText(dog),
+            metadata: {
+              shelterId: dog.shelterId,
+              city: dog.locationCity || undefined,
+              size: (dog.sizeEstimate as any)?.value || undefined,
+              ageMonths: (dog.ageEstimate as any)?.months || undefined,
+              sex: dog.sex || undefined,
+            }
+          }
+        }
+      })
+
+      const BATCH_SIZE = 100
+      for (let i = 0; i < jobs.length; i += BATCH_SIZE) {
+        const chunk = jobs.slice(i, i + BATCH_SIZE)
+        yield* Effect.tryPromise({
+          try: () => env.REINDEX_QUEUE!.sendBatch(chunk),
+          catch: (e) => new QueueError({ operation: "sendBatch reindex", cause: e })
+        })
+      }
+
+      return yield* json({ queued: jobs.length })
+    }),
+  },
   {
     method: "GET",
     pattern: new URLPattern({ pathname: "/admin/sync-stats" }),

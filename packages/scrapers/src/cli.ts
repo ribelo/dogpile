@@ -40,6 +40,8 @@ import {
   DescriptionGenerator,
   EmbeddingService,
   ImageGenerator,
+  SearchDocumentBuilder,
+  SearchDocumentBuilderLive,
 } from "@dogpile/core/services"
 
 interface ParsedArgs {
@@ -112,6 +114,7 @@ Commands:
     status                  Show photo statistics
     generate                Generate missing photos
     reset                   Delete ALL generated photos (requires --force)
+  reindex                 Reindex dogs for search
 
 Options:
   --limit <n>             Limit dogs to process
@@ -126,6 +129,7 @@ Examples:
   bun run cli list
   bun run cli run tozjawor
   bun run cli process tozjawor --limit 2
+  bun run cli reindex --limit 10
 `)
 })
 
@@ -678,14 +682,102 @@ const photosGenerateCommand = Effect.gen(function* () {
   yield* Console.log("\n✅ Generation complete.")
 })
 
+const reindexCommand = Effect.gen(function* () {
+  const limit = getIntFlag(parsed.flags, "limit", 99999)
+  const concurrency = Math.min(60, Math.max(1, getIntFlag(parsed.flags, "concurrency", 10)))
+
+  yield* Console.log(`\n🔍 Reindexing dogs (Limit: ${limit}, Concurrency: ${concurrency})\n`)
+
+  const result = yield* Effect.tryPromise({
+    try: async () => {
+      const query = `SELECT * FROM dogs WHERE status = 'available' LIMIT ${limit}`
+      const proc = await $`wrangler d1 execute dogpile-db --local --config ../../apps/api/wrangler.toml --json --command "${query}"`.quiet()
+      return JSON.parse(proc.stdout.toString())
+    },
+    catch: (e) => new DatabaseError({ operation: "fetch-dogs", cause: e })
+  })
+
+  const dogsData = result[0]?.results ?? []
+  if (dogsData.length === 0) {
+    yield* Console.log("✅ No dogs to reindex.")
+    return
+  }
+
+  const builder = yield* SearchDocumentBuilder
+  const embeddingService = yield* EmbeddingService
+
+  yield* Effect.forEach(dogsData, (dog: any, i) => Effect.gen(function* () {
+    yield* Console.log(`[${i + 1}/${dogsData.length}] Reindexing ${dog.name}...`)
+
+    // Parse JSON fields
+    const breedEstimates = JSON.parse(dog.breed_estimates || "[]")
+    const personalityTags = JSON.parse(dog.personality_tags || "[]")
+    const sizeEstimate = JSON.parse(dog.size_estimate || "null")
+    const ageEstimate = JSON.parse(dog.age_estimate || "null")
+
+    const doc = yield* builder.build({
+      id: dog.id,
+      shelterId: dog.shelter_id,
+      name: dog.name,
+      locationCity: dog.location_city,
+      sizeEstimate: sizeEstimate,
+      ageEstimate: ageEstimate,
+      breedEstimates: breedEstimates,
+      personalityTags: personalityTags,
+      generatedBio: dog.generated_bio,
+      sex: dog.sex,
+    })
+
+    yield* Console.log(`   📝 Built doc: ${doc.text.slice(0, 100)}...`)
+
+    const vector = yield* embeddingService.embed(doc.text).pipe(
+      Effect.catchAll((e) => {
+        console.error(`      ⚠️ Embedding failed: ${e.message}`)
+        return Effect.succeed(null)
+      })
+    )
+
+    if (vector) {
+      yield* Console.log(`   🔢 Generated vector (${vector.length} dim)`)
+      // Note: Local CLI doesn't have direct Vectorize access easily without wrangler commands
+      // We could use wrangler vectorize upsert but it's slow for many items.
+      // For now, we'll log it and suggest using the admin endpoint for remote reindexing.
+      
+      const metadata = JSON.stringify(doc.metadata).replace(/'/g, "''")
+      const values = JSON.stringify(vector)
+      
+      yield* Effect.tryPromise({
+        try: async () => {
+          const tmpFile = join(tmpdir(), `dogpile-vector-${dog.id}.json`)
+          const vectorObj = [{ id: dog.id, values: vector, metadata: doc.metadata }]
+          writeFileSync(tmpFile, JSON.stringify(vectorObj))
+          const cmd = `wrangler vectorize insert dogpile-dogs --local --config ../../apps/api/wrangler.toml --file ${tmpFile}`
+          const result = await $`sh -c "${cmd}"`.quiet().nothrow()
+          unlinkSync(tmpFile)
+          if (result.exitCode !== 0) {
+            throw new Error(result.stderr.toString())
+          }
+        },
+        catch: (e) => console.error(`      ❌ Error: ${e}`)
+      })
+      yield* Console.log(`      ✓ Upserted to Vectorize`)
+    }
+  }), { concurrency })
+
+  yield* Console.log("\n✅ Reindexing complete.")
+})
+
 // Build layers
 const AILayer = Layer.mergeAll(
   TextExtractor.Live,
   PhotoAnalyzer.Live,
   DescriptionGenerator.Live,
   EmbeddingService.Live,
-  ImageGenerator.Live
-).pipe(Layer.provide(OpenRouterClient.Live))
+  ImageGenerator.Live,
+  SearchDocumentBuilderLive
+).pipe(
+  Layer.provide(OpenRouterClient.Live)
+)
 
 const program = Effect.gen(function* () {
   if (!command || command === "help" || command === "--help") {
@@ -715,6 +807,10 @@ const program = Effect.gen(function* () {
     if (sub === "generate") { yield* photosGenerateCommand; return }
     yield* printUsage; return
  }
+  if (command === "reindex") {
+    yield* reindexCommand
+    return
+  }
   yield* Console.error(`Unknown command: ${command}`)
   yield* printUsage
 })

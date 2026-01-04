@@ -1,9 +1,12 @@
 import { Show, createEffect, createSignal, onCleanup } from "solid-js";
 import { Portal } from "solid-js/web";
+import { t } from "../i18n";
+import { CITIES } from "../constants/filters";
 
 interface MobileFilterSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  onFilter?: (filters: any) => void;
 }
 
 export default function MobileFilterSheet(props: MobileFilterSheetProps) {
@@ -45,16 +48,31 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
   });
 
   // Filter State
-  const [location, setLocation] = createSignal("");
+  const [city, setCity] = createSignal("");
   const [size, setSize] = createSignal("");
+  const [sex, setSex] = createSignal("");
   const [age, setAge] = createSignal("");
   const [energy, setEnergy] = createSignal("");
 
   const handleClear = () => {
-    setLocation("");
+    setCity("");
     setSize("");
+    setSex("");
     setAge("");
     setEnergy("");
+  };
+
+  const handleApply = () => {
+    const filters = {
+      city: city() || undefined,
+      size: size() || undefined,
+      sex: sex() || undefined,
+      age: age() || undefined,
+      energy: energy() || undefined,
+    };
+    const event = new CustomEvent('dog-filters-changed', { detail: filters });
+    window.dispatchEvent(event);
+    props.onClose();
   };
 
   return (
@@ -93,11 +111,11 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
 
             {/* Header */}
             <div class="px-6 py-4 flex items-center justify-between border-b border-sys-ink-primary/5 flex-shrink-0">
-              <h2 class="text-xl font-bold font-title text-sys-ink-primary">Filter Dogs</h2>
+              <h2 class="text-xl font-bold font-title text-sys-ink-primary">{t('filters.title')}</h2>
               <button 
                 onClick={props.onClose}
                 class="p-2 hover:bg-sys-ink-primary/5 rounded-full transition-colors"
-                aria-label="Close filters"
+                aria-label="Close"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -110,19 +128,38 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
             <div class="px-6 py-6 overflow-y-auto space-y-8 flex-1">
               {/* Location */}
               <div class="space-y-3">
-                <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">Location</label>
+                <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">{t('filters.location')}</label>
                 <div class="relative">
                   <select 
-                    value={location()}
-                    onChange={(e) => setLocation(e.currentTarget.value)}
+                    value={city()}
+                    onInput={(e) => setCity(e.currentTarget.value)}
                     class="filter-input w-full appearance-none"
                   >
-                    <option value="" disabled selected>Select Area</option>
-                    <option value="warszawa">Warszawa</option>
-                    <option value="krakow">Kraków</option>
-                    <option value="gdansk">Gdańsk</option>
-                    <option value="wroclaw">Wrocław</option>
-                    <option value="poznan">Poznań</option>
+                    <option value="">{t('filters.anywhere')}</option>
+                    {CITIES.map(c => (
+                      <option value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-sys-ink-primary/50">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sex */}
+              <div class="space-y-3">
+                <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">{t('filters.sex')}</label>
+                <div class="relative">
+                  <select 
+                    value={sex()}
+                    onInput={(e) => setSex(e.currentTarget.value)}
+                    class="filter-input w-full appearance-none"
+                  >
+                    <option value="">{t('filters.doesntMatter')}</option>
+                    <option value="male">{t('filters.male')}</option>
+                    <option value="female">{t('filters.female')}</option>
                   </select>
                   <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-sys-ink-primary/50">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -134,18 +171,17 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
 
               {/* Size */}
               <div class="space-y-3">
-                <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">Size</label>
+                <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">{t('filters.size')}</label>
                 <div class="relative">
                   <select 
                     value={size()}
-                    onChange={(e) => setSize(e.currentTarget.value)}
+                    onInput={(e) => setSize(e.currentTarget.value)}
                     class="filter-input w-full appearance-none"
                   >
-                    <option value="" disabled selected>Any Size</option>
-                    <option value="small">Small (0-25 lbs)</option>
-                    <option value="medium">Medium (26-60 lbs)</option>
-                    <option value="large">Large (61-100 lbs)</option>
-                    <option value="xl">Extra Large (100+ lbs)</option>
+                    <option value="">{t('filters.doesntMatter')}</option>
+                    <option value="small">{t('filters.pocketSized')}</option>
+                    <option value="medium">{t('filters.armful')}</option>
+                    <option value="large">{t('filters.bigBear')}</option>
                   </select>
                   <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-sys-ink-primary/50">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -206,7 +242,7 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
                 Clear
               </button>
               <button 
-                onClick={props.onClose}
+                onClick={handleApply}
                 class="btn-primary flex-1 justify-center shadow-lg shadow-sys-heart-core/20"
               >
                 Show Results

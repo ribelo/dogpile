@@ -28,9 +28,14 @@ preview_bucket_name = "dogpile-generated"
 binding = "IMAGE_QUEUE"
 queue = "dogpile-image-jobs"
 
+[[queues.producers]]
+binding = "REINDEX_QUEUE"
+queue = "dogpile-reindex-jobs"
+
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "dogpile-dogs"
 
 [vars]
 ENVIRONMENT = "development"
+OPENROUTER_MODEL = "google/text-embedding-004"

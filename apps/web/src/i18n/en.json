@@ -14,6 +14,7 @@
     "title": "Follow your nose",
     "subtitle": "Let's find who is waiting for you",
     "location": "Location",
+    "sex": "Sex",
     "size": "Size",
     "age": "Age",
     "vibe": "Vibe",
@@ -27,6 +28,8 @@
     "pocketSized": "Pocket Sized",
     "armful": "Armful",
     "bigBear": "Big Bear",
+    "male": "Male",
+    "female": "Female",
     "startSniffing": "Start Sniffing",
     "puppies": "Puppies",
     "small": "Small",
@@ -81,6 +84,9 @@
     "chipped": "Chipped",
     "story": "Story",
     "contact": "Say hello to",
-    "visitShelter": "Visit shelter website"
+    "visitShelter": "Visit shelter website",
+    "urgent": "URGENT!",
+    "tagline": "Looking for a soft place to land",
+    "vibeCheck": "Vibe Check"
   }
 }
