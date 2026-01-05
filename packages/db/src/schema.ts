@@ -83,7 +83,7 @@ export const dogs = sqliteTable("dogs", {
   // Meta
   sourceUrl: text("source_url"),
   urgent: integer("urgent", { mode: "boolean" }).notNull().default(false),
-  status: text("status", { enum: ["available", "adopted", "reserved", "removed"] }).notNull().default("available"),
+  status: text("status", { enum: ["pending", "available", "adopted", "reserved", "removed"] }).notNull().default("pending"),
   fingerprint: text("fingerprint").notNull().unique(),
   rawDescription: text("raw_description"),
   generatedBio: text("generated_bio"),

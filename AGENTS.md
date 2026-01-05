@@ -1,5 +1,23 @@
 # Repository Guidelines
 
+## Philosophy
+
+**Complexity is a Serial Killer:** Destroys maintainability, one abstraction at a time. Every abstraction must justify its existence or be removed.
+
+**Real Shit Works First:** Simplicity and functionality beat theoretical perfection. Shipping is the only truth that counts—perfect is the enemy of shipped.
+
+**Understand While Dying:** Solutions must be obvious enough to grasp even during a 3am crisis with maximum stress.
+
+**Good Taste Means Saying No:** The best code/design is often the deleted one. Delete first, justify later.
+
+Core truths:
+- If you can't explain it to a drunk friend at 2 a.m., you don't own it
+- The best part is no part. The best code is no code
+- Pretty theory? Show me the experiment that punches it in the nose
+- The simplest thing that could possibly work is usually the only thing that deserves to exist
+- Copy-paste without comprehension is intellectual shoplifting
+- The universe is under no obligation to match your mental model; adjust accordingly or crash
+
 ## Project Structure
 
 ## CRITICAL: Cloudflare Remote Bindings are BROKEN

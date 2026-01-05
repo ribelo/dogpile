@@ -250,7 +250,7 @@ export const processMessageBase = (
             photosGenerated: dog.photosGenerated ? [...dog.photosGenerated] : [],
             sourceUrl: dog.sourceUrl,
             urgent: textResult?.urgent ?? dog.urgent ?? false,
-            status: "available",
+            status: "pending",
             lastSeenAt: now,
             createdAt: now,
             updatedAt: now,
@@ -279,11 +279,7 @@ export const processMessageBase = (
         try: () =>
           db
             .update(dogs)
-            .set({ 
-              lastSeenAt: now, 
-              status: "available",
-              updatedAt: now 
-            })
+            .set({ lastSeenAt: now })
             .where(eq(dogs.id, existing.id)),
         catch: (e) => new DatabaseError({ operation: "update lastSeenAt", cause: e }),
       })
