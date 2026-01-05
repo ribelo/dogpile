@@ -146,7 +146,7 @@ export default function AdminDogEdit(props: Props) {
   return (
     <div>
       <div class="mb-6">
-        <a href="/admin/dogs" class="text-blue-600 hover:underline">← Back to dogs</a>
+        <a href="/admin/dogs" class="text-blue-600 hover:underline">Back to dogs</a>
       </div>
 
       <Show when={dog.loading}>

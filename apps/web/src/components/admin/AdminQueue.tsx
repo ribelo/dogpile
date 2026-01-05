@@ -1,4 +1,5 @@
 import { createResource, createSignal, For, Show } from "solid-js"
+import { Check, X } from "lucide-solid"
 
 interface Dog {
   id: string
@@ -160,7 +161,7 @@ export default function AdminQueue(props: Props) {
 
       <Show when={dogs() && dogs()!.dogs.length === 0}>
         <div class="bg-white rounded-lg shadow p-6 text-center">
-          <p class="text-gray-500 text-lg">No dogs waiting for review 🎉</p>
+          <p class="text-gray-500 text-lg">No dogs waiting for review</p>
         </div>
       </Show>
 
@@ -217,7 +218,7 @@ export default function AdminQueue(props: Props) {
                           disabled={loading() === dog.id}
                           class="text-sm bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 disabled:opacity-50"
                         >
-                          ✓
+                          <Check size={14} />
                         </button>
                         <a
                           href={`/admin/dogs/${dog.id}`}
@@ -230,7 +231,7 @@ export default function AdminQueue(props: Props) {
                           disabled={loading() === dog.id}
                           class="text-sm bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 disabled:opacity-50"
                         >
-                          ✕
+                          <X size={14} />
                         </button>
                       </div>
                     </td>

@@ -10,10 +10,11 @@
     "typecheck": "astro check && tsc --noEmit"
   },
   "dependencies": {
-    "astro": "^5.8.0",
+    "@astrojs/cloudflare": "^12.4.0",
     "@astrojs/solid-js": "^5.1.0",
     "@astrojs/tailwind": "^6.0.2",
-    "@astrojs/cloudflare": "^12.4.0",
+    "astro": "^5.8.0",
+    "lucide-solid": "^0.562.0",
     "solid-js": "^1.9.5"
   },
   "devDependencies": {

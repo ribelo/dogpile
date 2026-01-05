@@ -7,9 +7,9 @@ const { title } = Astro.props
 const currentPath = Astro.url.pathname
 
 const navItems = [
-  { href: '/admin', label: 'Dashboard', icon: '📊' },
-  { href: '/admin/queue', label: 'Queue', icon: '📋' },
-  { href: '/admin/dogs', label: 'Dogs', icon: '🐕' },
+  { href: '/admin', label: 'Dashboard', icon: 'LayoutDashboard' },
+  { href: '/admin/queue', label: 'Queue', icon: 'ListTodo' },
+  { href: '/admin/dogs', label: 'Dogs', icon: 'Dog' },
 ]
 
 function isActive(href: string): boolean {
@@ -33,6 +33,10 @@ function isActive(href: string): boolean {
       body {
         font-family: 'Inter', system-ui, sans-serif;
       }
+      .nav-icon {
+        width: 18px;
+        height: 18px;
+      }
     </style>
   </head>
   <body class="min-h-screen bg-gray-100">
@@ -40,7 +44,7 @@ function isActive(href: string): boolean {
       <!-- Sidebar -->
       <aside class="w-56 bg-gray-900 text-white flex flex-col">
         <div class="p-4 border-b border-gray-700">
-          <h1 class="text-xl font-bold">🐕 Dogpile</h1>
+          <h1 class="text-xl font-bold">Dogpile</h1>
           <p class="text-sm text-gray-400">Admin Panel</p>
         </div>
         <nav class="flex-1 p-4">
@@ -56,7 +60,11 @@ function isActive(href: string): boolean {
                       : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                   ]}
                 >
-                  <span>{item.icon}</span>
+                  <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    {item.icon === 'LayoutDashboard' && <><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></>}
+                    {item.icon === 'ListTodo' && <><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></>}
+                    {item.icon === 'Dog' && <><path d="M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.472 1.96-1.45 2.344-2.5"/><path d="M14.267 5.172c0-1.39 1.577-2.493 3.5-2.172 2.823.47 4.113 6.006 4 7-.08.703-1.725 1.722-3.656 1-1.261-.472-1.855-1.45-2.239-2.5"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/><path d="M4.42 11.247A13.152 13.152 0 0 0 4 14.556C4 18.728 7.582 21 12 21s8-2.272 8-6.444c0-1.061-.162-2.2-.493-3.309m-9.243-6.082A8.801 8.801 0 0 1 12 5c.78 0 1.5.108 2.161.306"/></>}
+                  </svg>
                   <span>{item.label}</span>
                 </a>
               </li>
@@ -65,7 +73,7 @@ function isActive(href: string): boolean {
         </nav>
         <div class="p-4 border-t border-gray-700">
           <a href="/" class="text-sm text-gray-400 hover:text-white">
-            ← Back to site
+            Back to site
           </a>
         </div>
       </aside>
