@@ -1,4 +1,5 @@
-import { createResource, createSignal, Show, For } from "solid-js"
+import { createResource, createSignal, Show, For, onCleanup } from "solid-js"
+import { getPhotoUrl } from "../../utils/photo-url"
 
 interface DogDetail {
   id: string
@@ -22,6 +23,23 @@ interface DogDetail {
   createdAt: string
   lastSeenAt: string | null
   fingerprint: string
+}
+
+const BREED_VALUES = [
+  "owczarek_niemiecki", "owczarek_belgijski", "owczarek_podhalanski", "owczarek_szetlandzki",
+  "labrador", "golden_retriever", "husky", "malamut", "bernardyn", "nowofundland",
+  "dog_niemiecki", "rottweiler", "doberman", "bokser", "amstaf", "pitbull", "cane_corso", "akita",
+  "border_collie", "beagle", "cocker_spaniel", "springer_spaniel", "seter", "pointer",
+  "buldog", "basenji", "shiba", "chow_chow", "shar_pei", "dalmatynczyk",
+  "jamnik", "jack_russell", "fox_terrier", "west_highland_terrier", "yorkshire_terrier",
+  "maltanczyk", "shih_tzu", "pekinczyk", "mops", "buldog_francuski", "chihuahua",
+  "pomeranian", "cavalier", "bichon", "pudel", "miniatura_schnauzer",
+  "gonczy_polski", "ogar_polski", "chart_polski",
+  "kundelek", "mieszaniec", "nieznana",
+] as const
+
+function getDisplayUrl(photoKey: string, size: "sm" | "lg" = "sm"): string {
+  return getPhotoUrl(photoKey, size)
 }
 
 interface Props {
@@ -74,10 +92,17 @@ async function regenerate(apiUrl: string, adminKey: string, dogId: string, targe
   if (!response.ok) throw new Error("Failed to regenerate")
 }
 
+interface ViewingPhoto {
+  url: string
+  category: keyof DogDetail['photos']
+  index: number
+}
+
 export default function AdminDogEdit(props: Props) {
   const [dog, { refetch }] = createResource(() => fetchDog(props.apiUrl, props.adminKey, props.dogId))
   const [saving, setSaving] = createSignal(false)
   const [message, setMessage] = createSignal<string | null>(null)
+  const [viewingPhoto, setViewingPhoto] = createSignal<ViewingPhoto | null>(null)
 
   // Form state
   const [name, setName] = createSignal("")
@@ -102,6 +127,41 @@ export default function AdminDogEdit(props: Props) {
     if (d) initForm(d)
     return d
   })
+
+  // Keyboard navigation for modal
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const current = viewingPhoto()
+    if (!current) return
+    
+    if (e.key === "Escape") setViewingPhoto(null)
+    if (e.key === "ArrowLeft") handlePrevPhoto()
+    if (e.key === "ArrowRight") handleNextPhoto()
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("keydown", handleKeyDown)
+    onCleanup(() => window.removeEventListener("keydown", handleKeyDown))
+  }
+
+  function handlePrevPhoto() {
+    const current = viewingPhoto()
+    const d = dog()
+    if (!current || !d) return
+    
+    const photos = d.photos[current.category]
+    const prevIndex = (current.index - 1 + photos.length) % photos.length
+    setViewingPhoto({ ...current, url: photos[prevIndex], index: prevIndex })
+  }
+
+  function handleNextPhoto() {
+    const current = viewingPhoto()
+    const d = dog()
+    if (!current || !d) return
+    
+    const photos = d.photos[current.category]
+    const nextIndex = (current.index + 1) % photos.length
+    setViewingPhoto({ ...current, url: photos[nextIndex], index: nextIndex })
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -217,7 +277,14 @@ export default function AdminDogEdit(props: Props) {
                     <h3 class="text-sm font-medium text-gray-500 mb-2">Original</h3>
                     <div class="flex flex-wrap gap-2">
                       <For each={d().photos.original}>
-                        {(url) => <img src={url} alt="Original" class="w-24 h-24 object-cover rounded" />}
+                        {(url, i) => (
+                          <img 
+                            src={getDisplayUrl(url)} 
+                            alt="Original" 
+                            class="w-24 h-24 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => setViewingPhoto({ url, category: 'original', index: i() })}
+                          />
+                        )}
                       </For>
                       <Show when={d().photos.original.length === 0}>
                         <p class="text-gray-400">No photos</p>
@@ -228,7 +295,14 @@ export default function AdminDogEdit(props: Props) {
                     <h3 class="text-sm font-medium text-gray-500 mb-2">Professional</h3>
                     <div class="flex flex-wrap gap-2">
                       <For each={d().photos.professional}>
-                        {(url) => <img src={url} alt="Professional" class="w-24 h-24 object-cover rounded" />}
+                        {(url, i) => (
+                          <img 
+                            src={getDisplayUrl(url)} 
+                            alt="Professional" 
+                            class="w-24 h-24 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => setViewingPhoto({ url, category: 'professional', index: i() })}
+                          />
+                        )}
                       </For>
                       <Show when={d().photos.professional.length === 0}>
                         <p class="text-gray-400">Not generated</p>
@@ -239,7 +313,14 @@ export default function AdminDogEdit(props: Props) {
                     <h3 class="text-sm font-medium text-gray-500 mb-2">Nose</h3>
                     <div class="flex flex-wrap gap-2">
                       <For each={d().photos.nose}>
-                        {(url) => <img src={url} alt="Nose" class="w-24 h-24 object-cover rounded" />}
+                        {(url, i) => (
+                          <img 
+                            src={getDisplayUrl(url)} 
+                            alt="Nose" 
+                            class="w-24 h-24 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => setViewingPhoto({ url, category: 'nose', index: i() })}
+                          />
+                        )}
                       </For>
                       <Show when={d().photos.nose.length === 0}>
                         <p class="text-gray-400">Not generated</p>
@@ -291,12 +372,16 @@ export default function AdminDogEdit(props: Props) {
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Breed</label>
-                    <input
-                      type="text"
+                    <select
                       value={breed()}
-                      onInput={(e) => setBreed(e.target.value)}
+                      onChange={(e) => setBreed(e.target.value)}
                       class="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    />
+                    >
+                      <option value="">Unknown / Mix</option>
+                      <For each={BREED_VALUES}>
+                        {(b) => <option value={b}>{b.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</option>}
+                      </For>
+                    </select>
                   </div>
                   <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Size</label>
@@ -356,6 +441,45 @@ export default function AdminDogEdit(props: Props) {
                   </p>
                 </div>
               </div>
+
+              {/* Photo Modal */}
+              <Show when={viewingPhoto()}>
+                {(photo) => (
+                  <div 
+                    class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+                    onClick={() => setViewingPhoto(null)}
+                  >
+                    <button 
+                      class="absolute top-4 right-4 text-white text-4xl hover:text-gray-300"
+                      onClick={() => setViewingPhoto(null)}
+                    >
+                      &times;
+                    </button>
+                    
+                    <div class="relative max-w-7xl max-h-[90vh] flex items-center" onClick={(e) => e.stopPropagation()}>
+                      <button 
+                        class="absolute left-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 z-10"
+                        onClick={handlePrevPhoto}
+                      >
+                        ←
+                      </button>
+                      
+                      <img src={getDisplayUrl(photo().url, "lg")} alt="Full size" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
+                      
+                      <button 
+                        class="absolute right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 z-10"
+                        onClick={handleNextPhoto}
+                      >
+                        →
+                      </button>
+                      
+                      <div class="absolute bottom-4 left-0 right-0 text-center text-white text-sm bg-black/50 py-1">
+                        {photo().category} • {photo().index + 1} / {d().photos[photo().category].length}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Show>
             </>
           )
         }}

@@ -121,7 +121,7 @@ Options:
   --json                  Output raw JSON
   --save                  Save to DB (for run command)
   --concurrency <n>       Parallel processing (default 10)
-  --skip-photos           Skip AI photo generation
+  --generate-photos       Generate AI photos (expensive, disabled by default)
   --force                   Bypass safety checks or overwrite
   --missing-only            For generate: only dogs without photos (default true)
   --id <id>                 Process specific dog ID
@@ -283,6 +283,7 @@ const processCommand = (scraperId: string) =>
   Effect.gen(function* () {
     const limitArg = getIntFlag(parsed.flags, "limit", 999)
     const concurrency = Math.min(60, Math.max(1, getIntFlag(parsed.flags, "concurrency", 10)))
+    const generatePhotos = getBoolFlag(parsed.flags, "generate-photos")
 
     const adapter = getAdapter(scraperId)
     if (!adapter) {
@@ -291,7 +292,7 @@ const processCommand = (scraperId: string) =>
     }
 
     yield* Console.log(`\n🐕 Processing: ${adapter.name}`)
-    yield* Console.log(`   Pipeline: scrape → AI text → AI photo → generate bio → save\n`)
+    yield* Console.log(`   Pipeline: scrape → AI text → AI photo → generate bio${generatePhotos ? " → generate photos" : ""} → save\n`)
     yield* Console.log(`   Concurrency: ${concurrency}`)
 
     const config = { shelterId: scraperId, baseUrl: "" }
@@ -421,7 +422,7 @@ const processCommand = (scraperId: string) =>
 
         // Generate fisheye nose photo (optional, expensive)
         const generatedPhotoUrls: string[] = []
-        if (bio?.bio && !getBoolFlag(parsed.flags, "skip-photos")) {
+        if (bio?.bio && generatePhotos) {
           yield* Console.log(`   🎨 Generating AI photos...`)
           const imgResult = yield* imageGenerator.generatePhotos({ dogDescription: bio.bio, referencePhotoUrl: dog.photos?.[0] }).pipe(
             Effect.catchAll((e) => {

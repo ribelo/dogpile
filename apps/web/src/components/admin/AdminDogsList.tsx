@@ -1,4 +1,4 @@
-import { createResource, createSignal, For, Show } from "solid-js"
+import { createResource, createSignal, For, Show, onCleanup } from "solid-js"
 
 interface Dog {
   id: string
@@ -10,6 +10,7 @@ interface Dog {
   age: string | null
   sex: string | null
   thumbnailUrl: string | null
+  sourceUrl: string | null
   status: string
   createdAt: string
 }
@@ -49,18 +50,70 @@ export default function AdminDogsList(props: Props) {
   const [status, setStatus] = createSignal("available")
   const [search, setSearch] = createSignal("")
   const [offset, setOffset] = createSignal(0)
+  const [updatingId, setUpdatingId] = createSignal<string | null>(null)
+  const [dogToDelete, setDogToDelete] = createSignal<Dog | null>(null)
+  const [isDeleting, setIsDeleting] = createSignal(false)
 
   const [dogs, { refetch }] = createResource(
     () => ({ status: status(), search: search(), offset: offset() }),
     (params) => fetchDogs(props.apiUrl, props.adminKey, params.status, params.search, params.offset)
   )
 
-  function handleSearch(e: Event) {
-    e.preventDefault()
-    const form = e.target as HTMLFormElement
-    const input = form.elements.namedItem("search") as HTMLInputElement
-    setSearch(input.value)
-    setOffset(0)
+  let searchTimeout: ReturnType<typeof setTimeout>
+  onCleanup(() => clearTimeout(searchTimeout))
+
+  function handleSearchInput(e: Event) {
+    const value = (e.target as HTMLInputElement).value
+    clearTimeout(searchTimeout)
+    searchTimeout = setTimeout(() => {
+      setSearch(value)
+      setOffset(0)
+    }, 300)
+  }
+
+  async function updateStatus(id: string, newStatus: string) {
+    setUpdatingId(id)
+    try {
+      const response = await fetch(`${props.apiUrl}/admin/dogs/${id}/status`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${props.adminKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ status: newStatus })
+      })
+      if (!response.ok) throw new Error("Failed to update status")
+      await refetch()
+    } catch (e) {
+      console.error(e)
+      alert("Failed to update status")
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  async function handleDelete() {
+    const dog = dogToDelete()
+    if (!dog) return
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`${props.apiUrl}/admin/dogs/${dog.id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${props.adminKey}`
+        }
+      })
+      if (!response.ok) throw new Error("Failed to delete dog")
+      
+      setDogToDelete(null)
+      await refetch()
+    } catch (e) {
+      console.error(e)
+      alert("Failed to delete dog")
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -82,17 +135,12 @@ export default function AdminDogsList(props: Props) {
             <option value="removed">Removed</option>
             <option value="pending">Pending</option>
           </select>
-          <form onSubmit={handleSearch} class="flex gap-2">
-            <input
-              type="text"
-              name="search"
-              placeholder="Search by name..."
-              class="border border-gray-300 rounded-lg px-3 py-2 w-64"
-            />
-            <button type="submit" class="bg-gray-200 px-3 py-2 rounded-lg hover:bg-gray-300">
-              Search
-            </button>
-          </form>
+          <input
+            type="text"
+            onInput={handleSearchInput}
+            placeholder="Search by name..."
+            class="border border-gray-300 rounded-lg px-3 py-2 w-64"
+          />
         </div>
       </div>
 
@@ -125,6 +173,7 @@ export default function AdminDogsList(props: Props) {
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Breed</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
@@ -146,13 +195,48 @@ export default function AdminDogsList(props: Props) {
                     <td class="px-4 py-3 text-gray-500">{dog.breed ?? "-"}</td>
                     <td class="px-4 py-3 text-gray-500">{dog.size ?? "-"}</td>
                     <td class="px-4 py-3">
-                      <span class={`px-2 py-1 rounded text-xs ${
-                        dog.status === "available" ? "bg-green-100 text-green-700" :
-                        dog.status === "pending" ? "bg-yellow-100 text-yellow-700" :
-                        "bg-gray-100 text-gray-700"
-                      }`}>
-                        {dog.status}
-                      </span>
+                      <div class="relative">
+                        <select
+                          value={dog.status}
+                          disabled={updatingId() === dog.id}
+                          onChange={(e) => updateStatus(dog.id, e.target.value)}
+                          class={`appearance-none border rounded px-2 py-1 text-sm pr-8 ${
+                            updatingId() === dog.id ? "opacity-50 cursor-wait" : "cursor-pointer"
+                          } ${
+                            dog.status === "available" ? "bg-green-50 border-green-200 text-green-800" :
+                            dog.status === "pending" ? "bg-yellow-50 border-yellow-200 text-yellow-800" :
+                            dog.status === "removed" ? "bg-red-50 border-red-200 text-red-800" :
+                            dog.status === "adopted" ? "bg-blue-50 border-blue-200 text-blue-800" :
+                            "bg-gray-50 border-gray-200 text-gray-800"
+                          }`}
+                        >
+                          <option value="available">Available</option>
+                          <option value="pending">Pending</option>
+                          <option value="reserved">Reserved</option>
+                          <option value="adopted">Adopted</option>
+                          <option value="removed">Removed</option>
+                        </select>
+                        <Show when={updatingId() === dog.id}>
+                          <div class="absolute right-2 top-1/2 -translate-y-1/2">
+                            <div class="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                          </div>
+                        </Show>
+                      </div>
+                    </td>
+                    <td class="px-4 py-3">
+                      <Show when={dog.sourceUrl}>
+                        <a 
+                          href={dog.sourceUrl!} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          class="text-blue-600 hover:text-blue-800"
+                          title="View Source"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                          </svg>
+                        </a>
+                      </Show>
                     </td>
                     <td class="px-4 py-3">
                       <a
@@ -161,6 +245,12 @@ export default function AdminDogsList(props: Props) {
                       >
                         Edit
                       </a>
+                      <button
+                        onClick={() => setDogToDelete(dog)}
+                        class="text-sm bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 ml-2"
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 )}
@@ -189,6 +279,43 @@ export default function AdminDogsList(props: Props) {
             Next
           </button>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        <Show when={dogToDelete()}>
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div 
+              class="fixed inset-0 bg-black/50 transition-opacity"
+              onClick={() => !isDeleting() && setDogToDelete(null)}
+            ></div>
+            <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <h3 class="text-lg font-bold text-gray-900 mb-2">
+                Delete {dogToDelete()?.name}?
+              </h3>
+              <p class="text-gray-500 mb-6">
+                Are you sure you want to delete this dog? This will permanently remove the dog and all associated photos.
+              </p>
+              <div class="flex justify-end gap-3">
+                <button
+                  onClick={() => setDogToDelete(null)}
+                  disabled={isDeleting()}
+                  class="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting()}
+                  class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Show when={isDeleting()} fallback="Delete">
+                    <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Deleting...
+                  </Show>
+                </button>
+              </div>
+            </div>
+          </div>
+        </Show>
       </Show>
     </div>
   )

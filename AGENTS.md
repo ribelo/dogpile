@@ -20,6 +20,23 @@ Core truths:
 
 ## Project Structure
 
+## CRITICAL: NixOS Development Environment
+
+**All commands MUST be run inside `nix develop`:**
+
+```bash
+# Either enter the shell first:
+nix develop
+bun run cli ...
+
+# Or prefix each command:
+nix develop -c bun run cli ...
+nix develop -c bun test
+```
+
+Native modules like `sharp` require the nix environment to find system libraries.
+Without `nix develop`, you'll get `libstdc++.so.6` or similar linker errors.
+
 ## CRITICAL: Cloudflare Remote Bindings are BROKEN
 
 **NEVER use these - they fail silently on NixOS:**
@@ -165,6 +182,10 @@ Search here for real implementations when docs aren't enough.
 - Use imperative mood: "Add feature" not "Added feature"
 - Keep subject under 50 chars, body under 72
 - Reference issues when applicable
+
+## Breaking Changes Policy
+
+**Breaking changes are welcome.** Do not spend time maintaining backward compatibility. Ship the better design, break what needs breaking.
 
 ## Issue Tracking
 

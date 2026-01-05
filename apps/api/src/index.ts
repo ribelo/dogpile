@@ -590,13 +590,69 @@ const routes: Route[] = [
     method: "DELETE",
     pattern: new URLPattern({ pathname: "/admin/dogs/:id" }),
     handler: Effect.fn("api.adminDeleteDog")(function* (req, env, params) {
-      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      if (!isAuthorized(req, env)) {
+        return yield* json({ error: "Unauthorized" }, 401)
+      }
       const db = drizzle(env.DB)
-      
+
+      const dog = yield* Effect.tryPromise({
+        try: () => db.select({ id: dogs.id, fingerprint: dogs.fingerprint }).from(dogs).where(eq(dogs.id, params.id)).get(),
+        catch: (e) => new DatabaseError({ operation: "getDogForDelete", cause: e })
+      })
+
+      if (!dog) {
+        return yield* json({ error: "Dog not found" }, 404)
+      }
+
+      // Delete from D1 first (authoritative data) - R2 cleanup follows
       yield* Effect.tryPromise({
         try: () => db.delete(dogs).where(eq(dogs.id, params.id)).run(),
         catch: (e) => new DatabaseError({ operation: "deleteDog", cause: e })
       })
+
+      // Cleanup original photos (best-effort, don't block on failure)
+      yield* Effect.tryPromise({
+        try: async () => {
+          let cursor: string | undefined
+          do {
+            const list = await env.PHOTOS_ORIGINAL.list({
+              prefix: `dogs/${dog.id}/`,
+              ...(cursor ? { cursor } : {})
+            })
+            const keys = list.objects.map(o => o.key)
+            if (keys.length > 0) {
+              await env.PHOTOS_ORIGINAL.delete(keys)
+            }
+            cursor = list.truncated ? list.cursor : undefined
+          } while (cursor)
+        },
+        catch: (e) => new R2Error({ operation: "deleteOriginalPhotos", cause: e })
+      }).pipe(
+        Effect.catchAll(e => Effect.sync(() => console.error("Failed to delete original photos", e)))
+      )
+
+      // Cleanup generated photos (only if fingerprint is valid to avoid mass deletion)
+      if (dog.fingerprint && dog.fingerprint.length >= 8) {
+        yield* Effect.tryPromise({
+          try: async () => {
+            let cursor: string | undefined
+            do {
+              const list = await env.PHOTOS_GENERATED.list({
+                prefix: `${dog.fingerprint}-`,
+                ...(cursor ? { cursor } : {})
+              })
+              const keys = list.objects.map(o => o.key)
+              if (keys.length > 0) {
+                await env.PHOTOS_GENERATED.delete(keys)
+              }
+              cursor = list.truncated ? list.cursor : undefined
+            } while (cursor)
+          },
+          catch: (e) => new R2Error({ operation: "deleteGeneratedPhotos", cause: e })
+        }).pipe(
+          Effect.catchAll(e => Effect.sync(() => console.error("Failed to delete generated photos", e)))
+        )
+      }
 
       if (env.REINDEX_QUEUE) {
         yield* Effect.tryPromise({
