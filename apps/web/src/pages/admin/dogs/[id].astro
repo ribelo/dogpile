@@ -1,0 +1,13 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro'
+import AdminDogEdit from '../../../components/admin/AdminDogEdit.tsx'
+
+const { id } = Astro.params
+const apiUrl = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
+// SECURITY: This page should be protected by Cloudflare Access
+const adminKey = import.meta.env.ADMIN_KEY ?? import.meta.env.PUBLIC_ADMIN_KEY ?? ''
+---
+
+<AdminLayout title="Edit Dog">
+  <AdminDogEdit client:load apiUrl={apiUrl} adminKey={adminKey} dogId={id!} />
+</AdminLayout>

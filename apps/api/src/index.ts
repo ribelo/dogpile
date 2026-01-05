@@ -362,7 +362,34 @@ const routes: Route[] = [
         catch: (e) => new DatabaseError({ operation: "adminListDogsCount", cause: e })
       })
 
-      return yield* json({ dogs: results, total: total?.count ?? 0 })
+      // Get shelter names
+      const shelterIds = [...new Set(results.map(d => d.shelterId))]
+      const shelterMap = new Map<string, string>()
+      if (shelterIds.length > 0) {
+        const shelterData = yield* Effect.tryPromise({
+          try: () => db.select({ id: shelters.id, name: shelters.name }).from(shelters).where(inArray(shelters.id, shelterIds)).all(),
+          catch: (e) => new DatabaseError({ operation: "getShelters", cause: e })
+        })
+        for (const s of shelterData) shelterMap.set(s.id, s.name)
+      }
+
+      // Transform to expected shape
+      const transformedDogs = results.map(dog => ({
+        id: dog.id,
+        name: dog.name,
+        shelterId: dog.shelterId,
+        shelterName: shelterMap.get(dog.shelterId) ?? "Unknown",
+        breed: (dog.breedEstimates as any)?.[0]?.breed ?? null,
+        size: (dog.sizeEstimate as any)?.value ?? null,
+        age: (dog.ageEstimate as any)?.months?.toString() ?? null,
+        sex: dog.sex,
+        thumbnailUrl: ((dog.photos as string[] | null) ?? [])[0] ?? null,
+        status: dog.status,
+        createdAt: dog.createdAt,
+        lastSeenAt: dog.lastSeenAt
+      }))
+
+      return yield* json({ dogs: transformedDogs, total: total?.count ?? 0 })
     }),
   },
   {
@@ -371,16 +398,45 @@ const routes: Route[] = [
     handler: Effect.fn("api.getAdminDog")(function* (req, env, params) {
       if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
       const db = drizzle(env.DB)
-      const result = yield* Effect.tryPromise({
+      const dog = yield* Effect.tryPromise({
         try: () => db.select().from(dogs).where(eq(dogs.id, params.id)).get(),
         catch: (e) => new DatabaseError({ operation: "getAdminDog", cause: e })
       })
       
-      if (!result) return yield* json({ error: "Dog not found" }, 404)
+      if (!dog) return yield* json({ error: "Dog not found" }, 404)
+      
+      // Get shelter name
+      const shelter = yield* Effect.tryPromise({
+        try: () => db.select({ name: shelters.name }).from(shelters).where(eq(shelters.id, dog.shelterId)).get(),
+        catch: (e) => new DatabaseError({ operation: "getShelter", cause: e })
+      })
+
+      // Transform to expected shape
+      const photos = (dog.photos as string[] | null) ?? []
+      const photosGenerated = (dog.photosGenerated as any[] | null) ?? []
       
       return yield* json({
-        ...result,
-        isRemoved: result.status === "removed"
+        id: dog.id,
+        name: dog.name,
+        shelterId: dog.shelterId,
+        shelterName: shelter?.name ?? "Unknown",
+        sourceUrl: dog.sourceUrl,
+        status: dog.status,
+        breed: (dog.breedEstimates as any)?.[0]?.breed ?? null,
+        size: (dog.sizeEstimate as any)?.value ?? null,
+        age: (dog.ageEstimate as any)?.months?.toString() ?? null,
+        sex: dog.sex,
+        description: dog.rawDescription,
+        personalityTags: dog.personalityTags,
+        healthStatus: null,
+        photos: {
+          original: photos,
+          professional: photosGenerated as string[],
+          nose: [] as string[]
+        },
+        createdAt: dog.createdAt,
+        lastSeenAt: dog.lastSeenAt,
+        fingerprint: dog.fingerprint
       })
     }),
   },
@@ -488,7 +544,7 @@ const routes: Route[] = [
       })
 
       // Only allow updating specific safe fields
-      const allowedFields = ["name", "sex", "rawDescription", "personalityTags", "healthStatus", "generatedBio"] as const
+      const allowedFields = ["name", "sex", "rawDescription", "personalityTags", "generatedBio"] as const
       const safeUpdate: Record<string, any> = { updatedAt: new Date() }
       for (const key of allowedFields) {
         if (body[key] !== undefined) {
@@ -581,9 +637,8 @@ const routes: Route[] = [
       }
 
       if ((body.target === "bio" || body.target === "all") && env.REINDEX_QUEUE) {
-        // We reuse REINDEX_QUEUE with a special type that scraper-processor could potentially pick up
-        // or we just re-upsert to trigger some side effect if configured.
-        // For now, we'll just send it to REINDEX_QUEUE as "regenerate-bio"
+        // TODO: regenerate-bio type is not handled by embedder yet
+        // This will be silently dropped until embedder is updated to handle it
         yield* Effect.tryPromise({
           try: () => env.REINDEX_QUEUE!.send({
             type: "regenerate-bio",
@@ -593,7 +648,10 @@ const routes: Route[] = [
         })
       }
 
-      return yield* json({ success: true, message: "Regeneration queued" })
+      return yield* json({ 
+        success: true, 
+        message: body.target === "bio" ? "Bio regeneration not yet implemented" : "Regeneration queued" 
+      })
     }),
   },
   {
