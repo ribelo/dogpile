@@ -16,6 +16,7 @@ interface Env {
   R2_PUBLIC_DOMAIN?: string
   IMAGE_QUEUE?: Queue<{ dogId: string; urls: string[] }>
   REINDEX_QUEUE?: Queue<any>
+  SCRAPE_QUEUE?: Queue<{ shelterId: string; shelterSlug: string; baseUrl: string }>
   ADMIN_KEY?: string
 }
 
@@ -23,7 +24,7 @@ interface Env {
  * TODO: Centralize ReindexJob type to avoid duplication
  */
 interface ReindexJob {
-  type: "upsert" | "delete"
+  type: "upsert" | "delete" | "regenerate-bio"
   dogId: string
   description?: string
   metadata?: {
@@ -36,6 +37,11 @@ interface ReindexJob {
 }
 
 type ApiError = DatabaseError | R2Error | QueueError
+
+const isAuthorized = (req: Request, env: Env): boolean => {
+  const auth = req.headers.get("Authorization")
+  return !!(env.ADMIN_KEY && auth === `Bearer ${env.ADMIN_KEY}`)
+}
 
 function buildSearchText(dog: any): string {
   const parts: string[] = [`Pies ${dog.name}`]
@@ -111,7 +117,6 @@ const routes: Route[] = [
       const db = drizzle(env.DB)
       const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "20") || 20, 1), 100)
       const offset = Math.max(parseInt(url.searchParams.get("offset") ?? "0") || 0, 0)
-      const validStatuses = ["available", "adopted", "removed", "reserved"]
       const statusParam = url.searchParams.get("status")
       const city = url.searchParams.get("city")
       const sex = url.searchParams.get("sex")
@@ -119,11 +124,12 @@ const routes: Route[] = [
 
       const filters: SQL[] = []
 
-      type DogStatus = "available" | "adopted" | "removed" | "reserved"
-      if (statusParam !== "all") {
-        const status = validStatuses.includes(statusParam ?? "") ? statusParam : "available"
-        filters.push(eq(dogs.status, status as DogStatus))
+      // Only allow available dogs in public API
+      if (statusParam && statusParam !== "available") {
+        return yield* json({ dogs: [], total: 0 })
       }
+      
+      filters.push(eq(dogs.status, "available"))
 
       if (city) {
         filters.push(sql`lower(${dogs.locationCity}) = lower(${city})`)
@@ -153,101 +159,494 @@ const routes: Route[] = [
   },
   {
     method: "GET",
-    pattern: new URLPattern({ pathname: "/dogs/search" }),
-    handler: Effect.fn("api.searchDogs")(function* (req, env) {
-    const url = new URL(req.url)
-    const query = url.searchParams.get("q")
-    if (!query) {
-      return yield* json({ error: "Missing q parameter" }, 400)
-    }
-    
-    const city = url.searchParams.get("city")
-    const size = url.searchParams.get("size")
-    const sex = url.searchParams.get("sex")
-    const parsedLimit = parseInt(url.searchParams.get("limit") || "10")
-    const limit = Math.min(isNaN(parsedLimit) ? 10 : parsedLimit, 50)
+   pattern: new URLPattern({ pathname: "/dogs/search" }),
+   handler: Effect.fn("api.searchDogs")(function* (req, env) {
+   const url = new URL(req.url)
+   const query = url.searchParams.get("q")
+   if (!query) {
+     return yield* json({ error: "Missing q parameter" }, 400)
+   }
+   
+   const city = url.searchParams.get("city")
+   const size = url.searchParams.get("size")
+   const sex = url.searchParams.get("sex")
+   const parsedLimit = parseInt(url.searchParams.get("limit") || "10")
+   const limit = Math.min(isNaN(parsedLimit) ? 10 : parsedLimit, 50)
 
-    // Get embedding for query
-    const embedding = yield* Effect.tryPromise({
-      try: async () => {
-        const response = await fetch("https://openrouter.ai/api/v1/embeddings", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: env.OPENROUTER_MODEL,
-            input: [query],
-          }),
+   // Get embedding for query
+   const embedding = yield* Effect.tryPromise({
+     try: async () => {
+       const response = await fetch("https://openrouter.ai/api/v1/embeddings", {
+         method: "POST",
+         headers: {
+           "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
+           "Content-Type": "application/json",
+         },
+         body: JSON.stringify({
+           model: env.OPENROUTER_MODEL,
+           input: [query],
+         }),
+       })
+       const data = await response.json() as { data: [{ embedding: number[] }] }
+       return data.data[0].embedding
+     },
+     catch: (e) => new DatabaseError({ operation: "get embedding", cause: e })
+   })
+
+   // Build metadata filter
+   const filter: Record<string, string> = {}
+   if (city) filter.city = city
+   if (size) filter.size = size
+   if (sex) filter.sex = sex
+
+   // TODO: Add age range filtering when Vectorize supports numeric comparisons
+
+   // Search Vectorize
+   const results = yield* Effect.tryPromise({
+     try: () => {
+       const options: VectorizeQueryOptions = {
+         topK: limit,
+       }
+       if (Object.keys(filter).length > 0) {
+         options.filter = filter
+       }
+       return env.VECTORIZE.query(embedding, options)
+     },
+     catch: (e) => new DatabaseError({ operation: "vector search", cause: e })
+   })
+
+   // Hydrate from D1
+   const db = drizzle(env.DB)
+   const ids = results.matches.map(m => m.id)
+   
+   if (ids.length === 0) {
+     return yield* json({ dogs: [], scores: [] })
+   }
+
+   const dogResults = yield* Effect.tryPromise({
+     try: () => db.select().from(dogs).where(and(inArray(dogs.id, ids), eq(dogs.status, "available"))).all(),
+     catch: (e) => new DatabaseError({ operation: "hydrate dogs", cause: e })
+   })
+
+   // Sort by vector score
+   const scoreMap = new Map(results.matches.map(m => [m.id, m.score]))
+   dogResults.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0))
+
+     // Remove fingerprint from response
+     const publicDogs = dogResults.map(({ fingerprint, ...rest }) => rest)
+
+     return yield* json({
+       dogs: publicDogs,
+       scores: dogResults.map(d => scoreMap.get(d.id) || 0)
+     })
+   }),
+ },
+  {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/dogs/:id" }),
+    handler: Effect.fn("api.getPublicDog")(function* (_req, env, params) {
+      const db = drizzle(env.DB)
+      const result = yield* Effect.tryPromise({
+        try: () => db.select().from(dogs).where(eq(dogs.id, params.id)).get(),
+        catch: (e) => new DatabaseError({ operation: "getPublicDog", cause: e })
+      })
+      
+      if (!result || result.status !== "available") {
+        return yield* json({ error: "Dog not found" }, 404)
+      }
+      
+      const { fingerprint, ...publicData } = result as any
+      return yield* json(publicData)
+    }),
+  },
+  {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/admin/stats" }),
+    handler: Effect.fn("api.adminStats")(function* (req, env) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const db = drizzle(env.DB)
+
+      const dogStats = yield* Effect.tryPromise({
+        try: () => db.select({ status: dogs.status, count: sql<number>`count(*)` }).from(dogs).groupBy(dogs.status).all(),
+        catch: (e) => new DatabaseError({ operation: "dogStats", cause: e })
+      })
+
+      const shelterData = yield* Effect.tryPromise({
+        try: () => db.select({
+          id: shelters.id,
+          name: shelters.name,
+          slug: shelters.slug,
+          status: shelters.status,
+          lastSync: shelters.lastSync,
+          dogCount: sql<number>`count(${dogs.id})`
         })
-        const data = await response.json() as { data: [{ embedding: number[] }] }
-        return data.data[0].embedding
-      },
-      catch: (e) => new DatabaseError({ operation: "get embedding", cause: e })
-    })
+        .from(shelters)
+        .leftJoin(dogs, eq(shelters.id, dogs.shelterId))
+        .groupBy(shelters.id)
+        .all(),
+        catch: (e) => new DatabaseError({ operation: "shelterStats", cause: e })
+      })
 
-    // Build metadata filter
-    const filter: Record<string, string> = {}
-    if (city) filter.city = city
-    if (size) filter.size = size
-    if (sex) filter.sex = sex
+      // Get last error for each shelter from sync_logs
+      const sheltersWithErrors = []
+      for (const s of shelterData) {
+        const lastLog = yield* Effect.tryPromise({
+          try: () => db.select({ errors: syncLogs.errors })
+            .from(syncLogs)
+            .where(eq(syncLogs.shelterId, s.id))
+            .orderBy(desc(syncLogs.startedAt))
+            .limit(1)
+            .get(),
+          catch: (e) => new DatabaseError({ operation: "lastSyncLog", cause: e })
+        })
+        
+        sheltersWithErrors.push({
+          ...s,
+          active: s.status === "active",
+          lastError: (lastLog?.errors && lastLog.errors.length > 0) ? lastLog.errors[0] : null
+        })
+      }
 
-    // TODO: Add age range filtering when Vectorize supports numeric comparisons
+      const stats = {
+        pending: 0,
+        available: 0,
+        removed: 0,
+        total: 0
+      }
 
-    // Search Vectorize
-    const results = yield* Effect.tryPromise({
-      try: () => {
-        const options: VectorizeQueryOptions = {
-          topK: limit,
-        }
-        if (Object.keys(filter).length > 0) {
-          options.filter = filter
-        }
-        return env.VECTORIZE.query(embedding, options)
-      },
-      catch: (e) => new DatabaseError({ operation: "vector search", cause: e })
-    })
-
-    // Hydrate from D1
-    const db = drizzle(env.DB)
-    const ids = results.matches.map(m => m.id)
-    
-    if (ids.length === 0) {
-      return yield* json({ dogs: [], scores: [] })
-    }
-
-    const dogResults = yield* Effect.tryPromise({
-      try: () => db.select().from(dogs).where(inArray(dogs.id, ids)).all(),
-      catch: (e) => new DatabaseError({ operation: "hydrate dogs", cause: e })
-    })
-
-    // Sort by vector score
-    const scoreMap = new Map(results.matches.map(m => [m.id, m.score]))
-    dogResults.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0))
+      for (const row of dogStats) {
+        if (row.status === "pending") stats.pending = row.count
+        else if (row.status === "available") stats.available = row.count
+        else if (row.status === "removed") stats.removed = row.count
+        stats.total += row.count
+      }
 
       return yield* json({
-        dogs: dogResults,
-        scores: dogResults.map(d => scoreMap.get(d.id) || 0)
+        dogs: stats,
+        shelters: sheltersWithErrors
       })
     }),
   },
   {
     method: "GET",
-    pattern: new URLPattern({ pathname: "/dogs/:id" }),
-    handler: Effect.fn("api.getDog")(function* (_req, env, params) {
+    pattern: new URLPattern({ pathname: "/admin/dogs" }),
+    handler: Effect.fn("api.adminListDogs")(function* (req, env) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const url = new URL(req.url)
+      const db = drizzle(env.DB)
+      
+      const status = url.searchParams.get("status")
+      if (!status) return yield* json({ error: "Status is required" }, 400)
+      
+      const shelterId = url.searchParams.get("shelterId")
+      const search = url.searchParams.get("search")
+      const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50") || 50, 200)
+      const offset = Math.max(parseInt(url.searchParams.get("offset") ?? "0") || 0, 0)
+
+      const filters: SQL[] = [eq(dogs.status, status as any)]
+      if (shelterId) filters.push(eq(dogs.shelterId, shelterId))
+      if (search) filters.push(like(dogs.name, `%${search}%`))
+
+      const results = yield* Effect.tryPromise({
+        try: () => db.select().from(dogs)
+          .where(and(...filters))
+          .orderBy(desc(dogs.updatedAt))
+          .limit(limit)
+          .offset(offset)
+          .all(),
+        catch: (e) => new DatabaseError({ operation: "adminListDogs", cause: e })
+      })
+
+      const total = yield* Effect.tryPromise({
+        try: () => db.select({ count: sql<number>`count(*)` }).from(dogs).where(and(...filters)).get(),
+        catch: (e) => new DatabaseError({ operation: "adminListDogsCount", cause: e })
+      })
+
+      return yield* json({ dogs: results, total: total?.count ?? 0 })
+    }),
+  },
+  {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/admin/dogs/:id" }),
+    handler: Effect.fn("api.getAdminDog")(function* (req, env, params) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
       const db = drizzle(env.DB)
       const result = yield* Effect.tryPromise({
         try: () => db.select().from(dogs).where(eq(dogs.id, params.id)).get(),
-        catch: (e) => new DatabaseError({ operation: "getDog", cause: e })
+        catch: (e) => new DatabaseError({ operation: "getAdminDog", cause: e })
       })
-      if (!result) {
-        return yield* json({ error: "Dog not found" }, 404)
-      }
+      
+      if (!result) return yield* json({ error: "Dog not found" }, 404)
+      
       return yield* json({
         ...result,
         isRemoved: result.status === "removed"
       })
+    }),
+  },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/admin/dogs/:id/status" }),
+    handler: Effect.fn("api.adminSetDogStatus")(function* (req, env, params) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const body = yield* Effect.tryPromise({
+        try: () => req.json() as Promise<{ status: "pending" | "available" | "removed" }>,
+        catch: (e) => new DatabaseError({ operation: "parseBody", cause: e })
+      })
+
+      // Validate status enum
+      const validStatuses = ["pending", "available", "removed"]
+      if (!validStatuses.includes(body.status)) {
+        return yield* json({ error: "Invalid status. Must be: pending, available, or removed" }, 400)
+      }
+
+      const db = drizzle(env.DB)
+      const result = yield* Effect.tryPromise({
+        try: () => db.update(dogs).set({ status: body.status, updatedAt: new Date() }).where(eq(dogs.id, params.id)).returning().get(),
+        catch: (e) => new DatabaseError({ operation: "updateDogStatus", cause: e })
+      })
+
+      if (!result) return yield* json({ error: "Dog not found" }, 404)
+
+      // Trigger reindex: upsert for available, delete for pending/removed
+      if (env.REINDEX_QUEUE) {
+        yield* Effect.tryPromise({
+          try: () => env.REINDEX_QUEUE!.send({
+            type: body.status === "available" ? "upsert" : "delete",
+            dogId: result.id,
+            description: buildSearchText(result),
+            metadata: {
+              shelterId: result.shelterId,
+              city: result.locationCity || undefined,
+              size: (result.sizeEstimate as any)?.value || undefined,
+              ageMonths: (result.ageEstimate as any)?.months || undefined,
+              sex: result.sex || undefined,
+            }
+          }),
+          catch: (e) => new QueueError({ operation: "enqueue reindex", cause: e })
+        })
+      }
+
+      return yield* json({ success: true, dog: { id: result.id, status: result.status } })
+    }),
+  },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/admin/dogs/bulk-status" }),
+    handler: Effect.fn("api.adminBulkStatus")(function* (req, env) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const body = yield* Effect.tryPromise({
+        try: () => req.json() as Promise<{ dogIds: string[], status: "available" | "removed" }>,
+        catch: (e) => new DatabaseError({ operation: "parseBody", cause: e })
+      })
+
+      const db = drizzle(env.DB)
+      let updated = 0
+      let failed = 0
+
+      for (const id of body.dogIds) {
+        const result = yield* Effect.tryPromise({
+          try: () => db.update(dogs).set({ status: body.status, updatedAt: new Date() }).where(eq(dogs.id, id)).returning().get(),
+          catch: (e) => new DatabaseError({ operation: "bulkUpdate", cause: e })
+        }).pipe(Effect.catchAll(() => Effect.succeed(null)))
+
+        if (result) {
+          updated++
+          if (env.REINDEX_QUEUE) {
+            yield* Effect.tryPromise({
+              try: () => env.REINDEX_QUEUE!.send({
+                type: body.status === "available" ? "upsert" : "delete",
+                dogId: result.id,
+                description: buildSearchText(result),
+                metadata: {
+                  shelterId: result.shelterId,
+                  city: result.locationCity || undefined,
+                  size: (result.sizeEstimate as any)?.value || undefined,
+                  ageMonths: (result.ageEstimate as any)?.months || undefined,
+                  sex: result.sex || undefined,
+                }
+              }),
+              catch: () => new QueueError({ operation: "reindex", cause: null })
+            })
+          }
+        } else {
+          failed++
+        }
+      }
+
+      return yield* json({ success: true, updated, failed })
+    }),
+  },
+  {
+    method: "PUT",
+    pattern: new URLPattern({ pathname: "/admin/dogs/:id" }),
+    handler: Effect.fn("api.adminUpdateDog")(function* (req, env, params) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const body = yield* Effect.tryPromise({
+        try: () => req.json() as Promise<any>,
+        catch: (e) => new DatabaseError({ operation: "parseBody", cause: e })
+      })
+
+      // Only allow updating specific safe fields
+      const allowedFields = ["name", "sex", "rawDescription", "personalityTags", "healthStatus", "generatedBio"] as const
+      const safeUpdate: Record<string, any> = { updatedAt: new Date() }
+      for (const key of allowedFields) {
+        if (body[key] !== undefined) {
+          safeUpdate[key] = body[key]
+        }
+      }
+      // Handle AI estimate fields specially
+      if (body.breed) safeUpdate.breedEstimates = [{ breed: body.breed, confidence: 1.0 }]
+      if (body.size) safeUpdate.sizeEstimate = { value: body.size, confidence: 1.0 }
+      if (body.age) safeUpdate.ageEstimate = { months: parseInt(body.age) || 12, confidence: 1.0 }
+
+      const db = drizzle(env.DB)
+      const result = yield* Effect.tryPromise({
+        try: () => db.update(dogs).set(safeUpdate).where(eq(dogs.id, params.id)).returning().get(),
+        catch: (e) => new DatabaseError({ operation: "updateDog", cause: e })
+      })
+
+      if (!result) return yield* json({ error: "Dog not found" }, 404)
+      
+      // Trigger reindex if available
+      if (env.REINDEX_QUEUE && result.status === "available") {
+        yield* Effect.tryPromise({
+          try: () => env.REINDEX_QUEUE!.send({
+            type: "upsert",
+            dogId: result.id,
+            description: buildSearchText(result),
+            metadata: {
+              shelterId: result.shelterId,
+              city: result.locationCity || undefined,
+              size: (result.sizeEstimate as any)?.value || undefined,
+              ageMonths: (result.ageEstimate as any)?.months || undefined,
+              sex: result.sex || undefined,
+            }
+          }),
+          catch: () => new QueueError({ operation: "reindex", cause: null })
+        })
+      }
+
+      return yield* json({ success: true, dog: result })
+    }),
+  },
+  {
+    method: "DELETE",
+    pattern: new URLPattern({ pathname: "/admin/dogs/:id" }),
+    handler: Effect.fn("api.adminDeleteDog")(function* (req, env, params) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const db = drizzle(env.DB)
+      
+      yield* Effect.tryPromise({
+        try: () => db.delete(dogs).where(eq(dogs.id, params.id)).run(),
+        catch: (e) => new DatabaseError({ operation: "deleteDog", cause: e })
+      })
+
+      if (env.REINDEX_QUEUE) {
+        yield* Effect.tryPromise({
+          try: () => env.REINDEX_QUEUE!.send({ type: "delete", dogId: params.id }),
+          catch: () => new QueueError({ operation: "reindex", cause: null })
+        })
+      }
+
+      return yield* json({ success: true })
+    }),
+  },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/admin/dogs/:id/regenerate" }),
+    handler: Effect.fn("api.adminRegenerateDog")(function* (req, env, params) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const body = yield* Effect.tryPromise({
+        try: () => req.json() as Promise<{ target: "bio" | "photos" | "all" }>,
+        catch: (e) => new DatabaseError({ operation: "parseBody", cause: e })
+      })
+
+      const db = drizzle(env.DB)
+      const dog = yield* Effect.tryPromise({
+        try: () => db.select().from(dogs).where(eq(dogs.id, params.id)).get(),
+        catch: (e) => new DatabaseError({ operation: "getDog", cause: e })
+      })
+
+      if (!dog) return yield* json({ error: "Dog not found" }, 404)
+
+      if ((body.target === "photos" || body.target === "all") && env.IMAGE_QUEUE) {
+        const externalUrls = (dog.photos || []).filter((p: string) => p.startsWith("http"))
+        if (externalUrls.length > 0) {
+          yield* Effect.tryPromise({
+            try: () => env.IMAGE_QUEUE!.send({ dogId: dog.id, urls: externalUrls }),
+            catch: (e) => new QueueError({ operation: "enqueue image job", cause: e })
+          })
+        }
+      }
+
+      if ((body.target === "bio" || body.target === "all") && env.REINDEX_QUEUE) {
+        // We reuse REINDEX_QUEUE with a special type that scraper-processor could potentially pick up
+        // or we just re-upsert to trigger some side effect if configured.
+        // For now, we'll just send it to REINDEX_QUEUE as "regenerate-bio"
+        yield* Effect.tryPromise({
+          try: () => env.REINDEX_QUEUE!.send({
+            type: "regenerate-bio",
+            dogId: dog.id
+          }),
+          catch: (e) => new QueueError({ operation: "enqueue regenerate bio", cause: e })
+        })
+      }
+
+      return yield* json({ success: true, message: "Regeneration queued" })
+    }),
+  },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/admin/shelters/:id/scrape" }),
+    handler: Effect.fn("api.adminScrapeShelter")(function* (req, env, params) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const db = drizzle(env.DB)
+      const shelter = yield* Effect.tryPromise({
+        try: () => db.select().from(shelters).where(eq(shelters.id, params.id)).get(),
+        catch: (e) => new DatabaseError({ operation: "getShelter", cause: e })
+      })
+
+      if (!shelter) return yield* json({ error: "Shelter not found" }, 404)
+
+      if (!env.SCRAPE_QUEUE) return yield* json({ error: "SCRAPE_QUEUE not configured" }, 500)
+
+      yield* Effect.tryPromise({
+        try: () => env.SCRAPE_QUEUE!.send({
+          shelterId: shelter.id,
+          shelterSlug: shelter.slug,
+          baseUrl: shelter.url
+        }),
+        catch: (e) => new QueueError({ operation: "enqueue scrape", cause: e })
+      })
+
+      return yield* json({ success: true, message: `Scrape queued for ${shelter.name}` })
+    }),
+  },
+  {
+    method: "PUT",
+    pattern: new URLPattern({ pathname: "/admin/shelters/:id" }),
+    handler: Effect.fn("api.adminUpdateShelter")(function* (req, env, params) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const body = yield* Effect.tryPromise({
+        try: () => req.json() as Promise<{ active?: boolean }>,
+        catch: (e) => new DatabaseError({ operation: "parseBody", cause: e })
+      })
+
+      const db = drizzle(env.DB)
+      const update: any = {}
+      if (typeof body.active === "boolean") {
+        update.status = body.active ? "active" : "inactive"
+      }
+
+      const result = yield* Effect.tryPromise({
+        try: () => db.update(shelters).set(update).where(eq(shelters.id, params.id)).returning().get(),
+        catch: (e) => new DatabaseError({ operation: "updateShelter", cause: e })
+      })
+
+      if (!result) return yield* json({ error: "Shelter not found" }, 404)
+
+      return yield* json({ success: true, shelter: result })
     }),
   },
   {
@@ -287,11 +686,13 @@ const routes: Route[] = [
   },
   {
     method: "POST",
-    pattern: new URLPattern({ pathname: "/admin/sync-generated-photos" }),
-    handler: Effect.fn("api.adminSyncGeneratedPhotos")(function* (req, env) {
-      const publicDomain = "dogpile-generated.extropy.club"
-      
-      const listed = yield* Effect.tryPromise({
+   pattern: new URLPattern({ pathname: "/admin/sync-generated-photos" }),
+   handler: Effect.fn("api.adminSyncGeneratedPhotos")(function* (req, env) {
+     if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+
+     const publicDomain = "dogpile-generated.extropy.club"
+     
+     const listed = yield* Effect.tryPromise({
         try: () => env.PHOTOS_GENERATED.list(),
         catch: (e) => new R2Error({ operation: "listGeneratedPhotos", cause: e })
       })

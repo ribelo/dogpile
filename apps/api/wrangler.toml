@@ -32,6 +32,10 @@ queue = "dogpile-image-jobs"
 binding = "REINDEX_QUEUE"
 queue = "dogpile-reindex-jobs"
 
+[[queues.producers]]
+binding = "SCRAPE_QUEUE"
+queue = "dogpile-scrape-jobs"
+
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "dogpile-dogs"

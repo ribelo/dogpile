@@ -14,3 +14,8 @@ export class QueueError extends Schema.TaggedError<QueueError>()("QueueError", {
   operation: Schema.String,
   cause: Schema.Defect,
 }) {}
+
+export class ValidationError extends Schema.TaggedError<ValidationError>()("ValidationError", {
+  operation: Schema.String,
+  message: Schema.String,
+}) {}
