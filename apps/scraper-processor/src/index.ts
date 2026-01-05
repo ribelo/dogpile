@@ -264,13 +264,8 @@ export const processMessageBase = (
       })
 
       if (dog.photos && dog.photos.length > 0) {
-        const externalUrls = dog.photos.filter((url: string) => url.startsWith("http"))
-        if (externalUrls.length > 0) {
-          yield* Effect.tryPromise({
-            try: () => env.IMAGE_QUEUE.send({ dogId: id, urls: externalUrls }),
-            catch: (e) => new QueueError({ operation: "enqueue image job", cause: e }),
-          })
-        }
+        // Photo generation is now manual-only, triggered via admin panel
+        // Original photos are stored; AI generation happens on demand
       }
 
       added++

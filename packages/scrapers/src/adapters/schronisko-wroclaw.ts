@@ -91,9 +91,16 @@ export const schroniskoWroclawAdapter = createAdapter({
 
             const photos = [
               ...new Set(
-                [...dogDoc.querySelectorAll("a.ee-gallery-item")]
-                  .map((a) => a.getAttribute("href"))
-                  .filter((href): href is string => !!href),
+                [...dogDoc.querySelectorAll("img.breakdance-image-object")]
+                  .map((img) => img.getAttribute("src"))
+                  .filter((src): src is string => 
+                    !!src && 
+                    src.includes("wp-content/uploads") &&
+                    !src.includes("logo") &&
+                    !src.includes("miasto_spotkan") &&
+                    !src.endsWith(".svg") &&
+                    !src.includes("schronisko_wroclaw")
+                  ),
               ),
             ]
 
