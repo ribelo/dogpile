@@ -66,7 +66,7 @@ async function deleteDog(apiUrl: string, adminKey: string, dogId: string): Promi
 }
 
 export default function AdminQueue(props: Props) {
-  const [dogs, { refetch }] = createResource(() => fetchPendingDogs(props.apiUrl, props.adminKey))
+  const [dogs, { refetch, mutate }] = createResource(() => fetchPendingDogs(props.apiUrl, props.adminKey))
   const [selected, setSelected] = createSignal<Set<string>>(new Set())
   const [loading, setLoading] = createSignal<string | null>(null)
 
@@ -90,43 +90,69 @@ export default function AdminQueue(props: Props) {
   }
 
   async function handleApprove(dogId: string) {
-    setLoading(dogId)
-    try {
-      await approveDog(props.apiUrl, props.adminKey, dogId)
-      refetch()
-    } catch (e) {
+   setLoading(dogId)
+    
+    // Optimistic - remove from pending list
+    mutate((prev) => prev ? ({
+      ...prev,
+      total: prev.total - 1,
+      dogs: prev.dogs.filter(d => d.id !== dogId)
+    }) : prev)
+
+   try {
+     await approveDog(props.apiUrl, props.adminKey, dogId)
+   } catch (e) {
+      // Rollback
+      await refetch()
       console.error("Approve failed:", e)
-    } finally {
-      setLoading(null)
-    }
+   } finally {
+     setLoading(null)
+   }
   }
 
   async function handleBulkApprove() {
-    const ids = Array.from(selected())
-    if (ids.length === 0) return
-    setLoading("bulk")
-    try {
-      await bulkApprove(props.apiUrl, props.adminKey, ids)
-      setSelected(new Set<string>())
-      refetch()
-    } catch (e) {
-      console.error("Bulk approve failed:", e)
-    } finally {
-      setLoading(null)
-    }
+   const ids = Array.from(selected())
+   if (ids.length === 0) return
+   setLoading("bulk")
+    
+    // Optimistic - remove all selected
+    const idsSet = new Set(ids)
+    mutate((prev) => prev ? ({
+      ...prev,
+      total: prev.total - ids.length,
+      dogs: prev.dogs.filter(d => !idsSet.has(d.id))
+    }) : prev)
+    setSelected(new Set<string>())
+
+   try {
+     await bulkApprove(props.apiUrl, props.adminKey, ids)
+   } catch (e) {
+      await refetch()
+     console.error("Bulk approve failed:", e)
+   } finally {
+     setLoading(null)
+   }
   }
 
   async function handleDelete(dogId: string) {
-    if (!confirm("Delete this dog permanently?")) return
-    setLoading(dogId)
-    try {
-      await deleteDog(props.apiUrl, props.adminKey, dogId)
-      refetch()
-    } catch (e) {
-      console.error("Delete failed:", e)
-    } finally {
-      setLoading(null)
-    }
+   if (!confirm("Delete this dog permanently?")) return
+   setLoading(dogId)
+    
+    // Optimistic delete
+    mutate((prev) => prev ? ({
+      ...prev,
+      total: prev.total - 1,
+      dogs: prev.dogs.filter(d => d.id !== dogId)
+    }) : prev)
+
+   try {
+     await deleteDog(props.apiUrl, props.adminKey, dogId)
+   } catch (e) {
+      await refetch()
+     console.error("Delete failed:", e)
+   } finally {
+     setLoading(null)
+   }
   }
 
   return (

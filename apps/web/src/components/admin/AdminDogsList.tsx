@@ -54,7 +54,7 @@ export default function AdminDogsList(props: Props) {
   const [dogToDelete, setDogToDelete] = createSignal<Dog | null>(null)
   const [isDeleting, setIsDeleting] = createSignal(false)
 
-  const [dogs, { refetch }] = createResource(
+  const [dogs, { refetch, mutate }] = createResource(
     () => ({ status: status(), search: search(), offset: offset() }),
     (params) => fetchDogs(props.apiUrl, props.adminKey, params.status, params.search, params.offset)
   )
@@ -73,6 +73,27 @@ export default function AdminDogsList(props: Props) {
 
   async function updateStatus(id: string, newStatus: string) {
     setUpdatingId(id)
+    
+    const currentFilter = status()
+    
+    // Optimistic update - remove from list if status doesn't match filter
+    mutate((prev) => {
+      if (!prev) return prev
+      if (newStatus !== currentFilter) {
+        // Dog no longer matches filter, remove it
+        return {
+          ...prev,
+          total: prev.total - 1,
+          dogs: prev.dogs.filter(d => d.id !== id)
+        }
+      }
+      // Status matches filter, just update in place
+      return {
+        ...prev,
+        dogs: prev.dogs.map(d => d.id === id ? { ...d, status: newStatus } : d)
+      }
+    })
+
     try {
       const response = await fetch(`${props.apiUrl}/admin/dogs/${id}/status`, {
         method: "POST",
@@ -83,8 +104,10 @@ export default function AdminDogsList(props: Props) {
         body: JSON.stringify({ status: newStatus })
       })
       if (!response.ok) throw new Error("Failed to update status")
-      await refetch()
+      // Success - UI already updated
     } catch (e) {
+      // Rollback on failure - refetch to restore correct state
+      await refetch()
       console.error(e)
       alert("Failed to update status")
     } finally {
@@ -97,6 +120,14 @@ export default function AdminDogsList(props: Props) {
     if (!dog) return
 
     setIsDeleting(true)
+    
+    // Optimistic delete
+    mutate((prev) => prev ? ({
+      ...prev,
+      total: prev.total - 1,
+      dogs: prev.dogs.filter(d => d.id !== dog.id)
+    }) : prev)
+
     try {
       const response = await fetch(`${props.apiUrl}/admin/dogs/${dog.id}`, {
         method: "DELETE",
@@ -105,10 +136,10 @@ export default function AdminDogsList(props: Props) {
         }
       })
       if (!response.ok) throw new Error("Failed to delete dog")
-      
       setDogToDelete(null)
-      await refetch()
     } catch (e) {
+      // Rollback - refetch to restore correct state
+      await refetch()
       console.error(e)
       alert("Failed to delete dog")
     } finally {

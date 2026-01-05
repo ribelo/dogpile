@@ -77,7 +77,8 @@ function buildSearchText(dog: any): string {
 type RouteHandler = (
   request: Request,
   env: Env,
-  params: Record<string, string>
+  params: Record<string, string>,
+  ctx: ExecutionContext
 ) => Effect.Effect<Response, ApiError, never>
 
 interface Route {
@@ -287,25 +288,35 @@ const routes: Route[] = [
         catch: (e) => new DatabaseError({ operation: "shelterStats", cause: e })
       })
 
-      // Get last error for each shelter from sync_logs
-      const sheltersWithErrors = []
-      for (const s of shelterData) {
-        const lastLog = yield* Effect.tryPromise({
-          try: () => db.select({ errors: syncLogs.errors })
-            .from(syncLogs)
-            .where(eq(syncLogs.shelterId, s.id))
-            .orderBy(desc(syncLogs.startedAt))
-            .limit(1)
-            .get(),
-          catch: (e) => new DatabaseError({ operation: "lastSyncLog", cause: e })
-        })
-        
-        sheltersWithErrors.push({
-          ...s,
-          active: s.status === "active",
-          lastError: (lastLog?.errors && lastLog.errors.length > 0) ? lastLog.errors[0] : null
-        })
+      // Get latest sync log errors for all shelters in one query
+      const latestLogs = yield* Effect.tryPromise({
+        try: () => env.DB.prepare(`
+          SELECT sl.shelter_id, sl.errors
+          FROM sync_logs sl
+          INNER JOIN (
+            SELECT shelter_id, MAX(started_at) as max_at
+            FROM sync_logs
+            GROUP BY shelter_id
+          ) latest ON sl.shelter_id = latest.shelter_id AND sl.started_at = latest.max_at
+        `).all(),
+        catch: (e) => new DatabaseError({ operation: "batchLatestErrors", cause: e })
+      })
+
+      const errorMap = new Map<string, string | null>()
+      for (const row of (latestLogs.results || []) as { shelter_id: string; errors: string }[]) {
+        try {
+          const errors = JSON.parse(row.errors || "[]")
+          errorMap.set(row.shelter_id, errors.length > 0 ? errors[0] : null)
+        } catch {
+          errorMap.set(row.shelter_id, null)
+        }
       }
+
+      const sheltersWithErrors = shelterData.map(s => ({
+        ...s,
+        active: s.status === "active",
+        lastError: errorMap.get(s.id) || null
+      }))
 
       const stats = {
         pending: 0,
@@ -497,40 +508,42 @@ const routes: Route[] = [
       })
 
       const db = drizzle(env.DB)
-      let updated = 0
-      let failed = 0
 
-      for (const id of body.dogIds) {
-        const result = yield* Effect.tryPromise({
-          try: () => db.update(dogs).set({ status: body.status, updatedAt: new Date() }).where(eq(dogs.id, id)).returning().get(),
-          catch: (e) => new DatabaseError({ operation: "bulkUpdate", cause: e })
-        }).pipe(Effect.catchAll(() => Effect.succeed(null)))
+      // Bulk update in single query
+      const results = yield* Effect.tryPromise({
+        try: () => db.update(dogs)
+          .set({ status: body.status, updatedAt: new Date() })
+          .where(inArray(dogs.id, body.dogIds))
+          .returning()
+          .all(),
+        catch: (e) => new DatabaseError({ operation: "bulkUpdate", cause: e })
+      })
 
-        if (result) {
-          updated++
-          if (env.REINDEX_QUEUE) {
-            yield* Effect.tryPromise({
-              try: () => env.REINDEX_QUEUE!.send({
-                type: body.status === "available" ? "upsert" : "delete",
-                dogId: result.id,
-                description: buildSearchText(result),
-                metadata: {
-                  shelterId: result.shelterId,
-                  city: result.locationCity || undefined,
-                  size: (result.sizeEstimate as any)?.value || undefined,
-                  ageMonths: (result.ageEstimate as any)?.months || undefined,
-                  sex: result.sex || undefined,
-                }
-              }),
-              catch: () => new QueueError({ operation: "reindex", cause: null })
-            })
+      // Batch reindex jobs
+      if (env.REINDEX_QUEUE && results.length > 0) {
+        const jobs = results.map(dog => ({
+          body: {
+            type: body.status === "available" ? "upsert" as const : "delete" as const,
+            dogId: dog.id,
+            description: buildSearchText(dog),
+            metadata: {
+              shelterId: dog.shelterId,
+              city: dog.locationCity || undefined,
+              size: (dog.sizeEstimate as any)?.value || undefined,
+              ageMonths: (dog.ageEstimate as any)?.months || undefined,
+              sex: dog.sex || undefined,
+            }
           }
-        } else {
-          failed++
+        }))
+
+        yield* Effect.tryPromise({
+          try: () => env.REINDEX_QUEUE!.sendBatch(jobs),
+          catch: () => new QueueError({ operation: "bulkReindex", cause: null })
         }
+        )
       }
 
-      return yield* json({ success: true, updated, failed })
+      return yield* json({ success: true, updated: results.length, failed: body.dogIds.length - results.length })
     }),
   },
   {
@@ -589,7 +602,7 @@ const routes: Route[] = [
   {
     method: "DELETE",
     pattern: new URLPattern({ pathname: "/admin/dogs/:id" }),
-    handler: Effect.fn("api.adminDeleteDog")(function* (req, env, params) {
+    handler: Effect.fn("api.adminDeleteDog")(function* (req, env, params, ctx: ExecutionContext) {
       if (!isAuthorized(req, env)) {
         return yield* json({ error: "Unauthorized" }, 401)
       }
@@ -604,62 +617,73 @@ const routes: Route[] = [
         return yield* json({ error: "Dog not found" }, 404)
       }
 
-      // Delete from D1 first (authoritative data) - R2 cleanup follows
+      const fingerprint = dog.fingerprint
+      const dogId = dog.id
+
+      // Delete from D1 first (authoritative data)
       yield* Effect.tryPromise({
         try: () => db.delete(dogs).where(eq(dogs.id, params.id)).run(),
         catch: (e) => new DatabaseError({ operation: "deleteDog", cause: e })
       })
 
-      // Cleanup original photos (best-effort, don't block on failure)
-      yield* Effect.tryPromise({
-        try: async () => {
-          let cursor: string | undefined
-          do {
-            const list = await env.PHOTOS_ORIGINAL.list({
-              prefix: `dogs/${dog.id}/`,
-              ...(cursor ? { cursor } : {})
-            })
-            const keys = list.objects.map(o => o.key)
-            if (keys.length > 0) {
-              await env.PHOTOS_ORIGINAL.delete(keys)
-            }
-            cursor = list.truncated ? list.cursor : undefined
-          } while (cursor)
-        },
-        catch: (e) => new R2Error({ operation: "deleteOriginalPhotos", cause: e })
-      }).pipe(
-        Effect.catchAll(e => Effect.sync(() => console.error("Failed to delete original photos", e)))
-      )
-
-      // Cleanup generated photos (only if fingerprint is valid to avoid mass deletion)
-      if (dog.fingerprint && dog.fingerprint.length >= 8) {
-        yield* Effect.tryPromise({
-          try: async () => {
-            let cursor: string | undefined
-            do {
-              const list = await env.PHOTOS_GENERATED.list({
-                prefix: `${dog.fingerprint}-`,
-                ...(cursor ? { cursor } : {})
-              })
-              const keys = list.objects.map(o => o.key)
-              if (keys.length > 0) {
-                await env.PHOTOS_GENERATED.delete(keys)
-              }
-              cursor = list.truncated ? list.cursor : undefined
-            } while (cursor)
-          },
-          catch: (e) => new R2Error({ operation: "deleteGeneratedPhotos", cause: e })
-        }).pipe(
-          Effect.catchAll(e => Effect.sync(() => console.error("Failed to delete generated photos", e)))
-        )
-      }
-
+      // Enqueue reindex job before returning
       if (env.REINDEX_QUEUE) {
         yield* Effect.tryPromise({
           try: () => env.REINDEX_QUEUE!.send({ type: "delete", dogId: params.id }),
           catch: () => new QueueError({ operation: "reindex", cause: null })
         })
       }
+
+      // Return success immediately, do R2 cleanup in background
+      const cleanup = Effect.gen(function* () {
+        // Cleanup original photos
+        yield* Effect.tryPromise({
+          try: async () => {
+            let cursor: string | undefined
+            do {
+              const list = await env.PHOTOS_ORIGINAL.list({
+                prefix: `dogs/${dogId}/`,
+                ...(cursor ? { cursor } : {})
+              })
+              const keys = list.objects.map(o => o.key)
+              if (keys.length > 0) {
+                await env.PHOTOS_ORIGINAL.delete(keys)
+              }
+              cursor = list.truncated ? list.cursor : undefined
+            } while (cursor)
+          },
+          catch: (e) => new R2Error({ operation: "deleteOriginalPhotos", cause: e })
+        }).pipe(
+          Effect.catchAll(e => Effect.sync(() => console.error("Failed to delete original photos", e)))
+        )
+
+        // Cleanup generated photos (only if fingerprint is valid)
+        if (fingerprint && fingerprint.length >= 8) {
+          yield* Effect.tryPromise({
+            try: async () => {
+              let cursor: string | undefined
+              do {
+                const list = await env.PHOTOS_GENERATED.list({
+                  prefix: `${fingerprint}-`,
+                  ...(cursor ? { cursor } : {})
+                })
+                const keys = list.objects.map(o => o.key)
+                if (keys.length > 0) {
+                  await env.PHOTOS_GENERATED.delete(keys)
+                }
+                cursor = list.truncated ? list.cursor : undefined
+              } while (cursor)
+            },
+            catch: (e) => new R2Error({ operation: "deleteGeneratedPhotos", cause: e })
+          }).pipe(
+            Effect.catchAll(e => Effect.sync(() => console.error("Failed to delete generated photos", e)))
+          )
+        }
+      }).pipe(
+        Effect.catchAll(e => Effect.sync(() => console.error("Background cleanup failed", e)))
+      )
+
+      ctx.waitUntil(Effect.runPromise(cleanup))
 
       return yield* json({ success: true })
     }),
@@ -1001,7 +1025,7 @@ export default {
       const match = route.pattern.exec(url)
       if (match) {
         const params = match.pathname.groups as Record<string, string>
-        const program = route.handler(request, env, params).pipe(
+        const program = route.handler(request, env, params, _ctx).pipe(
           Effect.catchAll((error) => {
             console.error(`API Error [${error._tag}]:`, error)
             return json({
