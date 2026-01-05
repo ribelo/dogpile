@@ -1,5 +1,4 @@
 import { createResource, createSignal, For, Show } from "solid-js"
-import { Check, AlertTriangle } from "lucide-solid"
 
 interface DogStats {
   pending: number
@@ -139,11 +138,11 @@ export default function AdminDashboard(props: Props) {
                           <td class="px-6 py-4 text-gray-500">{formatRelativeTime(shelter.lastSync)}</td>
                           <td class="px-6 py-4">
                             <Show 
-                              when={shelter.lastError} 
-                              fallback={<span class="text-green-600 flex items-center gap-1"><Check size={14} /> OK</span>}
-                            >
-                              <span class="text-red-600 flex items-center gap-1" title={shelter.lastError ?? ""}><AlertTriangle size={14} /> Error</span>
-                            </Show>
+                            when={shelter.lastError} 
+                            fallback={<span class="text-green-600 flex items-center gap-1"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> OK</span>}
+                          >
+                            <span class="text-red-600 flex items-center gap-1" title={shelter.lastError ?? ""}><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> Error</span>
+                          </Show>
                           </td>
                           <td class="px-6 py-4">
                             <button

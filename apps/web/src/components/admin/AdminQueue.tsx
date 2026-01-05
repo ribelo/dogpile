@@ -1,5 +1,16 @@
 import { createResource, createSignal, For, Show } from "solid-js"
-import { Check, X } from "lucide-solid"
+
+const CheckIcon = () => (
+  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+)
+
+const XIcon = () => (
+  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>
+  </svg>
+)
 
 interface Dog {
   id: string
@@ -244,7 +255,7 @@ export default function AdminQueue(props: Props) {
                           disabled={loading() === dog.id}
                           class="text-sm bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 disabled:opacity-50"
                         >
-                          <Check size={14} />
+                          <CheckIcon />
                         </button>
                         <a
                           href={`/admin/dogs/${dog.id}`}
@@ -257,7 +268,7 @@ export default function AdminQueue(props: Props) {
                           disabled={loading() === dog.id}
                           class="text-sm bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 disabled:opacity-50"
                         >
-                          <X size={14} />
+                          <XIcon />
                         </button>
                       </div>
                     </td>
