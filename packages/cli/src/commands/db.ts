@@ -37,52 +37,45 @@ const pullCommand = Command.make("pull", {}, () =>
   Effect.gen(function* () {
     yield* Console.log("Pulling data from remote D1...")
 
-    const tables = ["shelters", "dogs"]
-    const data: Record<string, unknown[]> = {}
-
-    for (const table of tables) {
-      yield* Console.log(`Fetching ${table}...`)
-      const cmd = `nix develop -c wrangler d1 execute ${DB_NAME} --remote --json --config ${CONFIG_PATH} --command "SELECT * FROM ${table}"`
-      const output = execSync(cmd, { encoding: "utf8", cwd: REPO_ROOT })
-      const jsonMatch = output.match(/\[[\s\S]*\]/)
-      if (!jsonMatch) {
-        return yield* new UnrecoverableError({ reason: `Failed to parse wrangler output for ${table}: ${output.slice(0, 200)}` })
-      }
-      const result = JSON.parse(jsonMatch[0])
-      data[table] = result[0].results
-    }
-
-    const dbPath = yield* findLocalDb()
-    yield* Console.log(`Updating local DB at ${dbPath}...`)
-    const db = new Database(dbPath)
-
-    db.run("BEGIN TRANSACTION")
+    const exportShelters = path.join(tmpdir(), `dogpile-remote-export-shelters-${Date.now()}.sql`)
+    const exportDogs = path.join(tmpdir(), `dogpile-remote-export-dogs-${Date.now()}.sql`)
     try {
-      for (const table of tables) {
-        db.run(`DELETE FROM ${table}`)
-        const rows = data[table] as Record<string, unknown>[]
-        if (rows.length === 0) continue
+      yield* Console.log("Exporting shelters + dogs from remote D1...")
+      execSync(
+        `wrangler d1 export ${DB_NAME} --remote --config ${CONFIG_PATH} --output ${exportShelters} --table shelters --no-schema`,
+        { stdio: "inherit", cwd: REPO_ROOT }
+      )
+      execSync(
+        `wrangler d1 export ${DB_NAME} --remote --config ${CONFIG_PATH} --output ${exportDogs} --table dogs --no-schema`,
+        { stdio: "inherit", cwd: REPO_ROOT }
+      )
 
-        const columns = Object.keys(rows[0])
-        const placeholders = columns.map(() => "?").join(",")
-        const insert = db.prepare(`INSERT INTO ${table} (${columns.join(",")}) VALUES (${placeholders})`)
+      yield* Console.log("Clearing local D1 tables...")
+      execSync(
+        `wrangler d1 execute ${DB_NAME} --local --config ${CONFIG_PATH} --command "DELETE FROM dogs; DELETE FROM shelters;"`,
+        { stdio: "inherit", cwd: REPO_ROOT }
+      )
 
-        for (const row of rows) {
-          const values = columns.map(col => {
-            const val = row[col]
-            return (typeof val === "object" && val !== null) ? JSON.stringify(val) : val
-          }) as (string | number | null | Uint8Array)[]
-          insert.run(...values as [])
-        }
-      }
-      db.run("COMMIT")
-    } catch (e) {
-      db.run("ROLLBACK")
-      throw e
+      yield* Console.log("Importing into local D1...")
+      execSync(
+        `wrangler d1 execute ${DB_NAME} --local --config ${CONFIG_PATH} --file ${exportShelters}`,
+        { stdio: "inherit", cwd: REPO_ROOT }
+      )
+      execSync(
+        `wrangler d1 execute ${DB_NAME} --local --config ${CONFIG_PATH} --file ${exportDogs}`,
+        { stdio: "inherit", cwd: REPO_ROOT }
+      )
+
+      const dbPath = yield* findLocalDb()
+      yield* Console.log(`Pull complete. Local DB updated at ${dbPath}`)
+    } finally {
+      try {
+        unlinkSync(exportShelters)
+      } catch {}
+      try {
+        unlinkSync(exportDogs)
+      } catch {}
     }
-
-    db.close()
-    yield* Console.log(`Pull complete. Synced ${(data.shelters as unknown[]).length} shelters, ${(data.dogs as unknown[]).length} dogs.`)
   })
 )
 
@@ -118,7 +111,7 @@ const pushCommand = Command.make("push", {}, () =>
 
     try {
       yield* Console.log(`Executing SQL on remote D1 (${shelters.length} shelters, ${dogs.length} dogs)...`)
-      execSync(`nix develop -c wrangler d1 execute ${DB_NAME} --remote --config ${CONFIG_PATH} --file ${tmpFile}`, { 
+      execSync(`wrangler d1 execute ${DB_NAME} --remote --config ${CONFIG_PATH} --file ${tmpFile}`, { 
         stdio: "inherit",
         cwd: REPO_ROOT
       })
