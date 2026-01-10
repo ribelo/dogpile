@@ -1,0 +1,12 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro'
+import CostStats from '../../components/admin/CostStats.tsx'
+
+const apiUrl = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
+const adminKey = import.meta.env.ADMIN_KEY ?? import.meta.env.PUBLIC_ADMIN_KEY ?? 'dev-admin-key-123'
+---
+
+<AdminLayout title="Costs">
+  <h1 class="text-2xl font-bold mb-6">AI Costs Analysis</h1>
+  <CostStats client:load apiUrl={apiUrl} adminKey={adminKey} />
+</AdminLayout>

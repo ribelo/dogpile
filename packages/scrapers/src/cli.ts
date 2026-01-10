@@ -263,17 +263,17 @@ const runCommand = (scraperId: string) =>
     if (saveToDb) {
       yield* Console.log(`💾 Saving...`)
       const esc = (s: string | null | undefined) => (s ?? "").replace(/'/g, "''")
-      const shelterSql = `INSERT INTO shelters (id, slug, name, url, city, status) VALUES ('${esc(scraperId)}', '${esc(scraperId)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', 'active') ON CONFLICT(id) DO UPDATE SET name = excluded.name`
+      const now = Date.now()
+      const shelterSql = `INSERT INTO shelters (id, slug, name, url, city, status, last_sync) VALUES ('${esc(scraperId)}', '${esc(scraperId)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', 'active', ${now}) ON CONFLICT(id) DO UPDATE SET name = excluded.name, last_sync = excluded.last_sync`
       yield* execSql(shelterSql)
 
-      const now = Math.floor(Date.now() / 1000)
       yield* Effect.forEach(rawDogs, (dog) =>
         Effect.gen(function* () {
-          const sql = `INSERT INTO dogs (id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint, status, urgent, created_at, updated_at, source_url, breed_estimates, personality_tags) VALUES ('${crypto.randomUUID()}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}', '${esc(dog.sex ?? "unknown")}', '${esc(dog.rawDescription)}', '${esc(JSON.stringify(dog.photos ?? []))}', '${esc(dog.fingerprint)}', 'available', ${dog.urgent ? 1 : 0}, ${now}, ${now}, '${esc(dog.sourceUrl ?? adapter.sourceUrl)}', '[]', '[]') ON CONFLICT(fingerprint) DO UPDATE SET updated_at = ${now}, source_url = excluded.source_url`
+          const sql = `INSERT INTO dogs (id, shelter_id, external_id, name, sex, raw_description, photos, fingerprint, status, urgent, created_at, updated_at, last_seen_at, source_url, breed_estimates, personality_tags) VALUES ('${crypto.randomUUID()}', '${esc(scraperId)}', '${esc(dog.externalId)}', '${esc(dog.name)}', '${esc(dog.sex ?? "unknown")}', '${esc(dog.rawDescription)}', '${esc(JSON.stringify(dog.photos ?? []))}', '${esc(dog.fingerprint)}', 'available', ${dog.urgent ? 1 : 0}, ${now}, ${now}, ${now}, '${esc(dog.sourceUrl ?? adapter.sourceUrl)}', '[]', '[]') ON CONFLICT(fingerprint) DO UPDATE SET updated_at = ${now}, last_seen_at = ${now}, source_url = excluded.source_url, raw_description = excluded.raw_description, photos = excluded.photos, name = CASE WHEN excluded.name != '' THEN excluded.name ELSE dogs.name END, sex = CASE WHEN excluded.sex != 'unknown' THEN excluded.sex ELSE dogs.sex END`
           yield* execSql(sql)
         })
-
       )
+      yield* execSql(`UPDATE shelters SET last_sync = ${now}, status = 'active' WHERE id = '${esc(scraperId)}'`)
       yield* Console.log(`   ✓ Saved ${rawDogs.length} dogs`)
     }
     yield* Console.log(`\n✅ Done.`)
@@ -329,10 +329,6 @@ const processCommand = (scraperId: string) =>
       }
     }).pipe(Effect.fork)
 
-    // Step 2: Ensure shelter
-    const shelterSql = `INSERT INTO shelters (id, slug, name, url, city, status) VALUES ('${esc(scraperId)}', '${esc(scraperId)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', 'active') ON CONFLICT(id) DO UPDATE SET name = excluded.name`
-    yield* sqlQueue.offer(shelterSql)
-
     // Get services
     const textExtractor = yield* TextExtractor
     const photoAnalyzer = yield* PhotoAnalyzer
@@ -341,7 +337,11 @@ const processCommand = (scraperId: string) =>
     const imageGenerator = yield* ImageGenerator
 
     yield* Console.log("🤖 AI Processing...")
-    const now = Math.floor(Date.now() / 1000)
+    const now = Date.now()
+
+    // Step 2: Ensure shelter
+    const shelterSql = `INSERT INTO shelters (id, slug, name, url, city, status, last_sync) VALUES ('${esc(scraperId)}', '${esc(scraperId)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', 'active', ${now}) ON CONFLICT(id) DO UPDATE SET name = excluded.name, last_sync = excluded.last_sync`
+    yield* sqlQueue.offer(shelterSql)
 
     const processDog = (dog: RawDogData, i: number) =>
       Effect.gen(function* () {
@@ -468,9 +468,20 @@ const processCommand = (scraperId: string) =>
         const id = crypto.randomUUID()
         const breedEstimates = JSON.stringify([...(textResult?.breedEstimates ?? []), ...(photoResult?.breedEstimates ?? [])].slice(0, 5))
         const personalityTags = JSON.stringify(textResult?.personalityTags ?? [])
-        const sizeEstimate = JSON.stringify(textResult?.sizeEstimate ?? photoResult?.sizeEstimate ?? null)
-        const ageEstimate = JSON.stringify(textResult?.ageEstimate ?? null)
-        const weightEstimate = JSON.stringify(textResult?.weightEstimate ?? null)
+        const sizeEstimate = textResult?.sizeEstimate ?? photoResult?.sizeEstimate ?? null
+        const ageEstimate = textResult?.ageEstimate ?? null
+        const weightEstimate = textResult?.weightEstimate ?? null
+
+        const sizeEstimateSql = sizeEstimate === null ? "NULL" : `'${esc(JSON.stringify(sizeEstimate))}'`
+        const ageEstimateSql = ageEstimate === null ? "NULL" : `'${esc(JSON.stringify(ageEstimate))}'`
+        const weightEstimateSql = weightEstimate === null ? "NULL" : `'${esc(JSON.stringify(weightEstimate))}'`
+
+        const isFosterSql =
+          textResult?.locationHints?.isFoster === undefined
+            ? "NULL"
+            : textResult.locationHints.isFoster
+              ? 1
+              : 0
 
         const sql = `
           INSERT INTO dogs (
@@ -489,9 +500,9 @@ const processCommand = (scraperId: string) =>
             '${esc(dog.fingerprint)}', 'available',
             ${textResult?.urgent ? 1 : 0}, ${now}, ${now}, ${now}, '${esc(dog.sourceUrl ?? adapter.sourceUrl)}',
             '${esc(breedEstimates)}', '${esc(personalityTags)}',
-            '${esc(sizeEstimate)}', '${esc(ageEstimate)}', '${esc(weightEstimate)}',
+            ${sizeEstimateSql}, ${ageEstimateSql}, ${weightEstimateSql},
             ${textResult?.locationHints?.cityMention ? `'${esc(textResult.locationHints.cityMention)}'` : `'${esc(adapter.city)}'`},
-            ${textResult?.locationHints?.isFoster ? 1 : 0},
+            ${isFosterSql},
             ${textResult?.vaccinated !== null && textResult?.vaccinated !== undefined ? (textResult.vaccinated ? 1 : 0) : 'NULL'},
             ${textResult?.sterilized !== null && textResult?.sterilized !== undefined ? (textResult.sterilized ? 1 : 0) : 'NULL'},
             ${textResult?.chipped !== null && textResult?.chipped !== undefined ? (textResult.chipped ? 1 : 0) : 'NULL'},
@@ -512,9 +523,29 @@ const processCommand = (scraperId: string) =>
             source_url = excluded.source_url,
             raw_description = excluded.raw_description,
             photos = excluded.photos,
+            name = CASE WHEN excluded.name != '' THEN excluded.name ELSE dogs.name END,
+            sex = CASE WHEN excluded.sex != 'unknown' THEN excluded.sex ELSE dogs.sex END,
             urgent = excluded.urgent,
             breed_estimates = CASE WHEN excluded.breed_estimates != '[]' THEN excluded.breed_estimates ELSE dogs.breed_estimates END,
             personality_tags = CASE WHEN excluded.personality_tags != '[]' THEN excluded.personality_tags ELSE dogs.personality_tags END,
+            size_estimate = COALESCE(excluded.size_estimate, dogs.size_estimate),
+            age_estimate = COALESCE(excluded.age_estimate, dogs.age_estimate),
+            weight_estimate = COALESCE(excluded.weight_estimate, dogs.weight_estimate),
+            location_city = COALESCE(excluded.location_city, dogs.location_city),
+            is_foster = COALESCE(excluded.is_foster, dogs.is_foster),
+            vaccinated = COALESCE(excluded.vaccinated, dogs.vaccinated),
+            sterilized = COALESCE(excluded.sterilized, dogs.sterilized),
+            chipped = COALESCE(excluded.chipped, dogs.chipped),
+            good_with_kids = COALESCE(excluded.good_with_kids, dogs.good_with_kids),
+            good_with_dogs = COALESCE(excluded.good_with_dogs, dogs.good_with_dogs),
+            good_with_cats = COALESCE(excluded.good_with_cats, dogs.good_with_cats),
+            fur_length = COALESCE(excluded.fur_length, dogs.fur_length),
+            fur_type = COALESCE(excluded.fur_type, dogs.fur_type),
+            color_primary = COALESCE(excluded.color_primary, dogs.color_primary),
+            color_secondary = COALESCE(excluded.color_secondary, dogs.color_secondary),
+            color_pattern = COALESCE(excluded.color_pattern, dogs.color_pattern),
+            ear_type = COALESCE(excluded.ear_type, dogs.ear_type),
+            tail_type = COALESCE(excluded.tail_type, dogs.tail_type),
             generated_bio = CASE WHEN excluded.generated_bio != '' THEN excluded.generated_bio ELSE dogs.generated_bio END,
             photos_generated = CASE WHEN excluded.photos_generated != '[]' THEN excluded.photos_generated ELSE dogs.photos_generated END
         `
@@ -531,6 +562,8 @@ const processCommand = (scraperId: string) =>
     // 4. Close queue and wait for writer
     yield* sqlQueue.offer(null)
     yield* Fiber.join(writerFiber)
+
+    yield* execSql(`UPDATE shelters SET last_sync = ${Date.now()}, status = 'active' WHERE id = '${esc(scraperId)}'`)
 
     yield* Console.log(`\n\n✅ Complete! Processed ${dogsToProcess.length} dogs.`)
   })

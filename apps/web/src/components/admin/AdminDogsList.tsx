@@ -1,4 +1,5 @@
 import { createResource, createSignal, For, Show, onCleanup } from "solid-js"
+import Search from "lucide-solid/icons/search"
 
 interface Dog {
   id: string
@@ -13,6 +14,7 @@ interface Dog {
   sourceUrl: string | null
   status: string
   createdAt: string
+  lastSeenAt: string | null
 }
 
 interface DogsResponse {
@@ -30,14 +32,20 @@ async function fetchDogs(
   adminKey: string,
   status: string,
   search: string,
-  offset: number
+  offset: number,
+  shelterId: string,
+  sortBy: string,
+  sortOrder: string
 ): Promise<DogsResponse> {
   const params = new URLSearchParams({
     status,
     limit: "50",
-    offset: offset.toString()
+    offset: offset.toString(),
+    sortBy,
+    sortOrder
   })
   if (search) params.set("search", search)
+  if (shelterId) params.set("shelterId", shelterId)
   
   const response = await fetch(`${apiUrl}/admin/dogs?${params}`, {
     headers: { Authorization: `Bearer ${adminKey}` }
@@ -47,20 +55,133 @@ async function fetchDogs(
 }
 
 export default function AdminDogsList(props: Props) {
-  const [status, setStatus] = createSignal("available")
-  const [search, setSearch] = createSignal("")
-  const [offset, setOffset] = createSignal(0)
+  const initialParams = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search)
+    : new URLSearchParams()
+
+  const rawStatus = initialParams.get("status")
+  const initialStatus = ["all", "pending", "available", "adopted", "reserved", "removed"].includes(rawStatus ?? "")
+    ? (rawStatus as string)
+    : "available"
+  const initialSearch = initialParams.get("search") ?? ""
+  const initialOffset = Math.max(parseInt(initialParams.get("offset") ?? "0") || 0, 0)
+  const initialShelter = initialParams.get("shelter") ?? initialParams.get("shelterId") ?? ""
+  const rawSortBy = initialParams.get("sortBy")
+  const initialSortBy = ["createdAt", "updatedAt", "lastSeenAt", "name"].includes(rawSortBy ?? "")
+    ? (rawSortBy as string)
+    : "createdAt"
+  const rawSortOrder = initialParams.get("sortOrder")
+  const initialSortOrder = rawSortOrder === "asc" || rawSortOrder === "desc"
+    ? rawSortOrder
+    : "desc"
+
+  const [status, setStatus] = createSignal(initialStatus)
+  const [search, setSearch] = createSignal(initialSearch)
+  const [offset, setOffset] = createSignal(initialOffset)
+  const [shelterId, setShelterId] = createSignal(initialShelter)
+  const [sortBy, setSortBy] = createSignal(initialSortBy)
+  const [sortOrder, setSortOrder] = createSignal(initialSortOrder)
   const [updatingId, setUpdatingId] = createSignal<string | null>(null)
   const [dogToDelete, setDogToDelete] = createSignal<Dog | null>(null)
   const [isDeleting, setIsDeleting] = createSignal(false)
 
   const [dogs, { refetch, mutate }] = createResource(
-    () => ({ status: status(), search: search(), offset: offset() }),
-    (params) => fetchDogs(props.apiUrl, props.adminKey, params.status, params.search, params.offset)
+    () => ({
+      status: status(),
+      search: search(),
+      offset: offset(),
+      shelterId: shelterId(),
+      sortBy: sortBy(),
+      sortOrder: sortOrder(),
+    }),
+    (params) =>
+      fetchDogs(
+        props.apiUrl,
+        props.adminKey,
+        params.status,
+        params.search,
+        params.offset,
+        params.shelterId,
+        params.sortBy,
+        params.sortOrder
+      )
   )
 
   let searchTimeout: ReturnType<typeof setTimeout>
   onCleanup(() => clearTimeout(searchTimeout))
+
+  function syncUrl(next?: {
+    status?: string
+    search?: string
+    offset?: number
+    shelterId?: string
+    sortBy?: string
+    sortOrder?: string
+  }) {
+    if (typeof window === "undefined") return
+
+    const url = new URL(window.location.href)
+    const nextStatus = next?.status ?? status()
+    const nextSearch = next?.search ?? search()
+    const nextOffset = next?.offset ?? offset()
+    const nextShelterId = next?.shelterId ?? shelterId()
+    const nextSortBy = next?.sortBy ?? sortBy()
+    const nextSortOrder = next?.sortOrder ?? sortOrder()
+
+    url.searchParams.set("status", nextStatus)
+    url.searchParams.set("sortBy", nextSortBy)
+    url.searchParams.set("sortOrder", nextSortOrder)
+    url.searchParams.set("offset", nextOffset.toString())
+
+    if (nextSearch) url.searchParams.set("search", nextSearch)
+    else url.searchParams.delete("search")
+
+    if (nextShelterId) url.searchParams.set("shelter", nextShelterId)
+    else url.searchParams.delete("shelter")
+
+    url.searchParams.delete("shelterId")
+    window.history.replaceState({}, "", url)
+  }
+
+  function formatRelativeTime(dateStr: string | null): string {
+    if (!dateStr) return "Never"
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return "Just now"
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    return `${diffDays}d ago`
+  }
+
+  function sortIndicator(column: string) {
+    if (sortBy() !== column) return null
+    return (
+      <span class="ml-1 text-gray-400">
+        {sortOrder() === "asc" ? "↑" : "↓"}
+      </span>
+    )
+  }
+
+  function toggleSort(column: string) {
+    if (sortBy() === column) {
+      const nextOrder = sortOrder() === "asc" ? "desc" : "asc"
+      setSortOrder(nextOrder)
+      setOffset(0)
+      syncUrl({ sortOrder: nextOrder, offset: 0 })
+      return
+    }
+
+    const defaultOrder = column === "name" ? "asc" : "desc"
+    setSortBy(column)
+    setSortOrder(defaultOrder)
+    setOffset(0)
+    syncUrl({ sortBy: column, sortOrder: defaultOrder, offset: 0 })
+  }
 
   function handleSearchInput(e: Event) {
     const value = (e.target as HTMLInputElement).value
@@ -68,6 +189,7 @@ export default function AdminDogsList(props: Props) {
     searchTimeout = setTimeout(() => {
       setSearch(value)
       setOffset(0)
+      syncUrl({ search: value, offset: 0 })
     }, 300)
   }
 
@@ -79,7 +201,7 @@ export default function AdminDogsList(props: Props) {
     // Optimistic update - remove from list if status doesn't match filter
     mutate((prev) => {
       if (!prev) return prev
-      if (newStatus !== currentFilter) {
+      if (currentFilter !== "all" && newStatus !== currentFilter) {
         // Dog no longer matches filter, remove it
         return {
           ...prev,
@@ -149,29 +271,62 @@ export default function AdminDogsList(props: Props) {
 
   return (
     <div>
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold">
-          All Dogs
-          <Show when={dogs()}>
-            <span class="text-gray-500 text-lg ml-2">({dogs()?.total ?? 0})</span>
-          </Show>
-        </h1>
-        <div class="flex gap-4">
-          <select
-            value={status()}
-            onChange={(e) => { setStatus(e.target.value); setOffset(0) }}
-            class="border border-gray-300 rounded-lg px-3 py-2"
-          >
-            <option value="available">Published</option>
-            <option value="removed">Removed</option>
-            <option value="pending">Pending</option>
-          </select>
-          <input
-            type="text"
-            onInput={handleSearchInput}
-            placeholder="Search by name..."
-            class="border border-gray-300 rounded-lg px-3 py-2 w-64"
-          />
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h1 class="text-2xl font-bold">
+            All Dogs
+            <Show when={dogs()}>
+              <span class="text-gray-500 text-lg ml-2">({dogs()?.total ?? 0})</span>
+            </Show>
+          </h1>
+        </div>
+
+        <div class="flex flex-col md:flex-row md:items-center gap-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+              <Search size={18} />
+            </div>
+            <input
+              type="text"
+              value={search()}
+              onInput={handleSearchInput}
+              placeholder="Search dogs by name..."
+              class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-50 focus:bg-white transition-colors"
+            />
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="text-sm font-medium text-gray-600 whitespace-nowrap">Status:</label>
+            <select
+              value={status()}
+              onChange={(e) => {
+                const next = e.target.value
+                setStatus(next)
+                setOffset(0)
+                syncUrl({ status: next, offset: 0 })
+              }}
+              class="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-blue-500 focus:border-blue-500 text-sm"
+            >
+              <option value="all">All</option>
+              <option value="available">Published</option>
+              <option value="removed">Removed</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="text-sm font-medium text-gray-600 whitespace-nowrap">Shelter:</label>
+            <input
+              type="text"
+              value={shelterId()}
+              onChange={(e) => {
+                const next = (e.target as HTMLInputElement).value.trim()
+                setShelterId(next)
+                setOffset(0)
+                syncUrl({ shelterId: next, offset: 0 })
+              }}
+              placeholder="ID"
+              class="border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-blue-500 focus:border-blue-500 text-sm w-48"
+            />
+          </div>
         </div>
       </div>
 
@@ -199,8 +354,28 @@ export default function AdminDogsList(props: Props) {
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Photo</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th
+                  class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none hover:bg-gray-100"
+                  onClick={() => toggleSort("name")}
+                >
+                  Name
+                  {sortIndicator("name")}
+                </th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shelter</th>
+                <th
+                  class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none hover:bg-gray-100"
+                  onClick={() => toggleSort("createdAt")}
+                >
+                  Added
+                  {sortIndicator("createdAt")}
+                </th>
+                <th
+                  class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer select-none hover:bg-gray-100"
+                  onClick={() => toggleSort("lastSeenAt")}
+                >
+                  Last Seen
+                  {sortIndicator("lastSeenAt")}
+                </th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Breed</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -223,6 +398,8 @@ export default function AdminDogsList(props: Props) {
                       </a>
                     </td>
                     <td class="px-4 py-3 text-gray-500">{dog.shelterName}</td>
+                    <td class="px-4 py-3 text-gray-500">{formatRelativeTime(dog.createdAt)}</td>
+                    <td class="px-4 py-3 text-gray-500">{formatRelativeTime(dog.lastSeenAt)}</td>
                     <td class="px-4 py-3 text-gray-500">{dog.breed ?? "-"}</td>
                     <td class="px-4 py-3 text-gray-500">{dog.size ?? "-"}</td>
                     <td class="px-4 py-3">
@@ -293,7 +470,11 @@ export default function AdminDogsList(props: Props) {
         {/* Pagination */}
         <div class="mt-4 flex justify-between items-center">
           <button
-            onClick={() => setOffset(Math.max(0, offset() - 50))}
+            onClick={() => {
+              const next = Math.max(0, offset() - 50)
+              setOffset(next)
+              syncUrl({ offset: next })
+            }}
             disabled={offset() === 0}
             class="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
           >
@@ -303,7 +484,11 @@ export default function AdminDogsList(props: Props) {
             Showing {offset() + 1} - {Math.min(offset() + 50, dogs()?.total ?? 0)} of {dogs()?.total}
           </span>
           <button
-            onClick={() => setOffset(offset() + 50)}
+            onClick={() => {
+              const next = offset() + 50
+              setOffset(next)
+              syncUrl({ offset: next })
+            }}
             disabled={offset() + 50 >= (dogs()?.total ?? 0)}
             class="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
           >

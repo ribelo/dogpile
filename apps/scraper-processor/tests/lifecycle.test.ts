@@ -40,19 +40,25 @@ describe("Dog Lifecycle", () => {
   let mockAdapter: any
 
   const createStmt = (data: any = []) => {
+    const allResult = { results: data, success: true, meta: {} }
+    const rawRows = Array.isArray(data)
+      ? data.map((row) => (row && typeof row === "object" ? Object.values(row) : [row]))
+      : []
     const stmt = {
       bind: mock(function() {
         return {
-          all: mock(() => Promise.resolve(data)),
+          all: mock(() => Promise.resolve(allResult)),
           run: mock(() => Promise.resolve({ success: true })),
+          first: mock(() => Promise.resolve(data[0] || null)),
           get: mock(() => Promise.resolve(data[0] || null)),
-          raw: mock(() => Promise.resolve(data))
+          raw: mock(() => Promise.resolve(rawRows))
         }
       }),
-      all: mock(() => Promise.resolve(data)),
+      all: mock(() => Promise.resolve(allResult)),
       run: mock(() => Promise.resolve({ success: true })),
+      first: mock(() => Promise.resolve(data[0] || null)),
       get: mock(() => Promise.resolve(data[0] || null)),
-      raw: mock(() => Promise.resolve(data))
+      raw: mock(() => Promise.resolve(rawRows))
     }
     return stmt
   }
@@ -100,22 +106,30 @@ describe("Dog Lifecycle", () => {
 
   describe("Circuit Breaker", () => {
     test("triggers when scraped count < 30% of existing", async () => {
-      const existingDogs = Array.from({ length: 100 }, (_, i) => ({
-        id: `dog-${i}`,
+      const existingDogs = Array.from({ length: 10 }, (_, i) => ({
         fingerprint: `fp-${i}`,
+        id: `dog-${i}`,
         status: "available"
       }))
       
+      let returnedExistingDogs = false
       const prepareMock = mock((query: string) => {
-        let data: any[] = []
-        if (query.toLowerCase().includes("select") && query.toLowerCase().includes("dogs") && !query.includes("<")) {
-           data = existingDogs
+        const lower = query.toLowerCase()
+        const isExistingDogsQuery =
+          lower.startsWith("select") &&
+          lower.includes("from \"dogs\"") &&
+          !query.includes("<")
+
+        if (isExistingDogsQuery) {
+          returnedExistingDogs = true
+          return createStmt(existingDogs)
         }
-        return createStmt(data)
+
+        return createStmt([])
       })
       mockEnv.DB.prepare = prepareMock
 
-      mockAdapter.parse = mock(() => Effect.succeed(Array.from({ length: 20 }, (_, i) => ({
+      mockAdapter.parse = mock(() => Effect.succeed(Array.from({ length: 2 }, (_, i) => ({
         fingerprint: `new-fp-${i}`,
         rawDescription: "desc",
         externalId: `ext-${i}`,
@@ -128,7 +142,9 @@ describe("Dog Lifecycle", () => {
         )
       )
 
-      expect(mockMessage.ack).toHaveBeenCalled()
+      expect(returnedExistingDogs).toBe(true)
+      expect(mockMessage.retry).toHaveBeenCalled()
+      expect(mockMessage.ack).not.toHaveBeenCalled()
       
       const syncLogUpdate = prepareMock.mock.calls.find((call: any) => 
         call[0].toLowerCase().includes("update") && 
@@ -140,8 +156,8 @@ describe("Dog Lifecycle", () => {
     
     test("allows when scraped count >= 30%", async () => {
        const existingDogs = Array.from({ length: 100 }, (_, i) => ({
-        id: `dog-${i}`,
         fingerprint: `fp-${i}`,
+        id: `dog-${i}`,
         status: "available"
       }))
       
@@ -185,8 +201,8 @@ describe("Dog Lifecycle", () => {
   describe("Heartbeat", () => {
     test("updates lastSeenAt for found dogs", async () => {
       const existingDogs = [{
-        id: "dog-1",
         fingerprint: "fp-1",
+        id: "dog-1",
         status: "available",
         lastSeenAt: new Date(Date.now() - 48 * 60 * 60 * 1000)
       }]
@@ -224,8 +240,8 @@ describe("Dog Lifecycle", () => {
     
     test("resets status to available if was removed", async () => {
       const existingDogs = [{
-        id: "dog-1",
         fingerprint: "fp-1",
+        id: "dog-1",
         status: "removed",
         lastSeenAt: new Date(Date.now() - 48 * 60 * 60 * 1000)
       }]

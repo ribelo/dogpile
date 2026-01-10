@@ -58,7 +58,7 @@ const handleImageJobBase = Effect.fn("scraper.handleImageJob")(function* (
 ) {
   const job = message.body
   const db = drizzle(env.DB)
-  const processedKeys: string[] = []
+  const processedByUrl = new Map<string, string>()
 
   for (const url of job.urls) {
     const result = yield* processImage(url, job.dogId, env).pipe(
@@ -70,11 +70,11 @@ const handleImageJobBase = Effect.fn("scraper.handleImageJob")(function* (
     )
 
     if (result) {
-      processedKeys.push(result)
+      processedByUrl.set(url, result)
     }
   }
 
-  if (processedKeys.length > 0) {
+  if (processedByUrl.size > 0) {
     yield* Effect.tryPromise({
       try: async () => {
         const dog = await db
@@ -85,13 +85,9 @@ const handleImageJobBase = Effect.fn("scraper.handleImageJob")(function* (
         if (!dog) return
 
         const existingPhotos = dog.photos || []
-        const updatedPhotos = existingPhotos.map((photo: string, idx: number) => {
+        const updatedPhotos = existingPhotos.map((photo: string) => {
           if (!photo.startsWith("http")) return photo
-          const urlIdx = job.urls.indexOf(photo)
-          if (urlIdx !== -1 && processedKeys[urlIdx]) {
-            return processedKeys[urlIdx]
-          }
-          return photo
+          return processedByUrl.get(photo) ?? photo
         })
 
         await db
@@ -103,7 +99,7 @@ const handleImageJobBase = Effect.fn("scraper.handleImageJob")(function* (
     })
 
     yield* Effect.logInfo(
-      `Processed ${processedKeys.length} photos for dog ${job.dogId}`
+      `Processed ${processedByUrl.size} photos for dog ${job.dogId}`
     )
   }
 

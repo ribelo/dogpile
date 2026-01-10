@@ -1,17 +1,22 @@
-import { Effect, Layer, Option } from "effect"
+import { Effect, Layer, Option, Schema } from "effect"
 import { FetchHttpClient } from "@effect/platform"
 import { drizzle } from "drizzle-orm/d1"
-import { dogs, shelters, syncLogs } from "@dogpile/db"
+import { apiCosts, dogs, shelters, syncLogs } from "@dogpile/db"
 import { getAdapter } from "@dogpile/scrapers"
 import { eq, and, sql, inArray } from "drizzle-orm"
 import {
   TextExtractor,
   PhotoAnalyzer,
   DescriptionGenerator,
+  ApiCostTracker,
   OpenRouterClient,
 } from "@dogpile/core/services"
 import { handleImageJobs, type ImageJob, type ImagesBinding } from "./image-handler.js"
 import { DatabaseError, QueueError } from "./errors.js"
+
+class ApiCostInsertError extends Schema.TaggedError<ApiCostInsertError>()("ApiCostInsertError", {
+  cause: Schema.Defect,
+}) {}
 
 interface Env {
   DB: D1Database
@@ -125,7 +130,7 @@ export const processMessageBase = (
           catch: (e) => new DatabaseError({ operation: "update sync log (circuit breaker)", cause: e }),
         })
 
-      message.ack()
+      message.retry()
       return
     }
   }
@@ -264,17 +269,21 @@ export const processMessageBase = (
       })
 
       if (dog.photos && dog.photos.length > 0) {
-        // Photo generation is now manual-only, triggered via admin panel
-        // Original photos are stored; AI generation happens on demand
+        // Photo generation is currently manual-only (CLI), not part of the pipeline.
+        // This worker stores original photos; AI-generated photos are produced separately.
       }
 
       added++
     } else {
+      const updates =
+        existing.status === "removed"
+          ? { lastSeenAt: now, status: "available" as const, updatedAt: now }
+          : { lastSeenAt: now }
       yield* Effect.tryPromise({
         try: () =>
           db
             .update(dogs)
-            .set({ lastSeenAt: now })
+            .set(updates)
             .where(eq(dogs.id, existing.id)),
         catch: (e) => new DatabaseError({ operation: "update lastSeenAt", cause: e }),
       })
@@ -360,12 +369,13 @@ export const processMessageBase = (
     catch: (e) => new DatabaseError({ operation: "update sync log", cause: e }),
   })
 
-  yield* Effect.tryPromise({
-    try: () =>
-      db
-        .update(shelters)
-        .set({ lastSync: new Date(), status: "active" })
-        .where(eq(shelters.id, job.shelterId)),
+ yield* Effect.tryPromise({
+   try: () =>
+     db
+       .update(shelters)
+       .set({ lastSync: new Date(), status: "active" })
+        .where(eq(shelters.id, job.shelterId))
+        .run(),
     catch: (e) => new DatabaseError({ operation: "update shelter", cause: e }),
   })
 
@@ -378,10 +388,36 @@ export const processMessageBase = (
 
 const processMessage = (message: Message<ScrapeJob>, env: Env) => {
   const syncLogId = crypto.randomUUID()
+  const costDb = drizzle(env.DB)
+  const ApiCostTrackerLive = Layer.succeed(
+    ApiCostTracker,
+    ApiCostTracker.of({
+      log: (entry) =>
+        Effect.tryPromise({
+          try: () =>
+            costDb.insert(apiCosts).values({
+              id: crypto.randomUUID(),
+              createdAt: entry.createdAt,
+              operation: entry.operation,
+              model: entry.model,
+              inputTokens: entry.inputTokens,
+              outputTokens: entry.outputTokens,
+              costUsd: entry.costUsd,
+            }),
+          catch: (e) => new ApiCostInsertError({ cause: e }),
+        }).pipe(
+          Effect.catchAll((e) =>
+            Effect.logWarning(`api_costs insert failed: ${e}`).pipe(Effect.asVoid)
+          )
+        ),
+    })
+  )
+
   return processMessageBase(message, env, syncLogId).pipe(
     Effect.provide(
       Layer.mergeAll(
         FetchHttpClient.layer,
+        ApiCostTrackerLive,
         Layer.provide(
           Layer.mergeAll(
             TextExtractor.Live,

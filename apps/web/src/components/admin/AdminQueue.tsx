@@ -1,16 +1,7 @@
-import { createResource, createSignal, For, Show } from "solid-js"
-
-const CheckIcon = () => (
-  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <polyline points="20 6 9 17 4 12"/>
-  </svg>
-)
-
-const XIcon = () => (
-  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>
-  </svg>
-)
+import { createResource, createSignal, For, Show, onCleanup } from "solid-js"
+import Check from "lucide-solid/icons/check"
+import X from "lucide-solid/icons/x"
+import Search from "lucide-solid/icons/search"
 
 interface Dog {
   id: string
@@ -36,8 +27,16 @@ interface Props {
   adminKey: string
 }
 
-async function fetchPendingDogs(apiUrl: string, adminKey: string): Promise<DogsResponse> {
-  const response = await fetch(`${apiUrl}/admin/dogs?status=pending&limit=100`, {
+async function fetchPendingDogs(apiUrl: string, adminKey: string, search: string): Promise<DogsResponse> {
+  const params = new URLSearchParams({
+    status: "pending",
+    limit: "100",
+    sortBy: "updatedAt",
+    sortOrder: "desc"
+  })
+  if (search) params.set("search", search)
+
+  const response = await fetch(`${apiUrl}/admin/dogs?${params}`, {
     headers: { Authorization: `Bearer ${adminKey}` }
   })
   if (!response.ok) throw new Error("Failed to fetch dogs")
@@ -77,9 +76,24 @@ async function deleteDog(apiUrl: string, adminKey: string, dogId: string): Promi
 }
 
 export default function AdminQueue(props: Props) {
-  const [dogs, { refetch, mutate }] = createResource(() => fetchPendingDogs(props.apiUrl, props.adminKey))
+  const [search, setSearch] = createSignal("")
+  const [dogs, { refetch, mutate }] = createResource(
+    () => ({ search: search() }),
+    (params) => fetchPendingDogs(props.apiUrl, props.adminKey, params.search)
+  )
   const [selected, setSelected] = createSignal<Set<string>>(new Set())
   const [loading, setLoading] = createSignal<string | null>(null)
+
+  let searchTimeout: ReturnType<typeof setTimeout>
+  onCleanup(() => clearTimeout(searchTimeout))
+
+  function handleSearchInput(e: Event) {
+    const value = (e.target as HTMLInputElement).value
+    clearTimeout(searchTimeout)
+    searchTimeout = setTimeout(() => {
+      setSearch(value)
+    }, 300)
+  }
 
   function toggleSelect(id: string) {
     const newSet = new Set(selected())
@@ -168,20 +182,36 @@ export default function AdminQueue(props: Props) {
 
   return (
     <div>
-      <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold">
-          Pending Dogs
-          <Show when={dogs()}>
-            <span class="text-gray-500 text-lg ml-2">({dogs()?.total ?? 0})</span>
-          </Show>
-        </h1>
-        <button
-          onClick={handleBulkApprove}
-          disabled={selected().size === 0 || loading() === "bulk"}
-          class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-        >
-          {loading() === "bulk" ? "Approving..." : `Approve Selected (${selected().size})`}
-        </button>
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h1 class="text-2xl font-bold">
+            Pending Dogs
+            <Show when={dogs()}>
+              <span class="text-gray-500 text-lg ml-2">({dogs()?.total ?? 0})</span>
+            </Show>
+          </h1>
+          <button
+            onClick={handleBulkApprove}
+            disabled={selected().size === 0 || loading() === "bulk"}
+            class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+          >
+            {loading() === "bulk" ? "Approving..." : `Approve Selected (${selected().size})`}
+          </button>
+        </div>
+
+        <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div class="relative max-w-md">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+              <Search size={18} />
+            </div>
+            <input
+              type="text"
+              onInput={handleSearchInput}
+              placeholder="Search pending dogs..."
+              class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-gray-50 focus:bg-white transition-colors text-sm"
+            />
+          </div>
+        </div>
       </div>
 
       <Show when={dogs.loading}>
@@ -252,24 +282,24 @@ export default function AdminQueue(props: Props) {
                       <div class="flex gap-2">
                         <button
                           onClick={() => handleApprove(dog.id)}
-                          disabled={loading() === dog.id}
-                          class="text-sm bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 disabled:opacity-50"
-                        >
-                          <CheckIcon />
-                        </button>
-                        <a
-                          href={`/admin/dogs/${dog.id}`}
-                          class="text-sm bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300"
-                        >
-                          Edit
-                        </a>
-                        <button
-                          onClick={() => handleDelete(dog.id)}
-                          disabled={loading() === dog.id}
-                          class="text-sm bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 disabled:opacity-50"
-                        >
-                          <XIcon />
-                        </button>
+                         disabled={loading() === dog.id}
+                         class="text-sm bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 disabled:opacity-50"
+                       >
+                          <Check size={14} />
+                       </button>
+                       <a
+                         href={`/admin/dogs/${dog.id}`}
+                         class="text-sm bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300"
+                       >
+                         Edit
+                       </a>
+                       <button
+                         onClick={() => handleDelete(dog.id)}
+                         disabled={loading() === dog.id}
+                         class="text-sm bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 disabled:opacity-50"
+                       >
+                          <X size={14} />
+                       </button>
                       </div>
                     </td>
                   </tr>

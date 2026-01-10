@@ -112,3 +112,17 @@ export const syncLogs = sqliteTable("sync_logs", {
   index("sync_logs_shelter_id_idx").on(table.shelterId),
   index("sync_logs_started_at_idx").on(table.startedAt),
 ])
+
+export const apiCosts = sqliteTable("api_costs", {
+  id: text("id").primaryKey(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  operation: text("operation").notNull(),
+  model: text("model").notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  costUsd: real("cost_usd").notNull().default(0),
+}, (table) => [
+  index("api_costs_created_at_idx").on(table.createdAt),
+  index("api_costs_operation_idx").on(table.operation),
+  index("api_costs_model_idx").on(table.model),
+])

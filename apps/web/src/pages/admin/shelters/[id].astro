@@ -1,0 +1,13 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro'
+import AdminShelterEdit from '../../../components/admin/AdminShelterEdit.tsx'
+
+const { id } = Astro.params
+const apiUrl = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
+// SECURITY: This page should be protected by Cloudflare Access
+const adminKey = import.meta.env.ADMIN_KEY ?? import.meta.env.PUBLIC_ADMIN_KEY ?? 'dev-admin-key-123'
+---
+
+<AdminLayout title="Edit Shelter">
+  <AdminShelterEdit client:load apiUrl={apiUrl} adminKey={adminKey} shelterId={id!} />
+</AdminLayout>

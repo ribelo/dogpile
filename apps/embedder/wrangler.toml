@@ -3,6 +3,12 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+[[d1_databases]]
+binding = "DB"
+database_name = "dogpile-db"
+database_id = "ea4a4ec7-ad28-4219-a86f-5054bc79b21c"
+migrations_dir = "../../packages/db/migrations"
+
 [[queues.consumers]]
 queue = "dogpile-reindex-jobs"
 max_batch_size = 10
@@ -13,7 +19,8 @@ binding = "VECTORIZE"
 index_name = "dogpile-dogs"
 
 [vars]
-OPENROUTER_MODEL = "google/text-embedding-004"  # 768 dimensions
+OPENROUTER_MODEL = "google/text-embedding-004"
+MODEL_EMBEDDING = "google/text-embedding-004"
 
 [secrets]
 # OPENROUTER_API_KEY - set via wrangler secret put

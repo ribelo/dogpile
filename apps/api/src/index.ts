@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { drizzle } from "drizzle-orm/d1"
-import { dogs, shelters, syncLogs } from "@dogpile/db"
-import { eq, desc, and, like, sql, SQL, inArray } from "drizzle-orm"
+import { dogs, shelters, syncLogs, apiCosts } from "@dogpile/db"
+import { eq, desc, asc, and, like, sql, SQL, inArray } from "drizzle-orm"
 import { DatabaseError, R2Error, QueueError } from "./errors"
 
 interface Env {
@@ -291,7 +291,7 @@ const routes: Route[] = [
       // Get latest sync log errors for all shelters in one query
       const latestLogs = yield* Effect.tryPromise({
         try: () => env.DB.prepare(`
-          SELECT sl.shelter_id, sl.errors
+          SELECT sl.shelter_id, sl.errors, sl.started_at, sl.finished_at
           FROM sync_logs sl
           INNER JOIN (
             SELECT shelter_id, MAX(started_at) as max_at
@@ -303,19 +303,35 @@ const routes: Route[] = [
       })
 
       const errorMap = new Map<string, string | null>()
-      for (const row of (latestLogs.results || []) as { shelter_id: string; errors: string }[]) {
+      const startedAtMap = new Map<string, string | null>()
+      const finishedAtMap = new Map<string, string | null>()
+
+      const toIsoTimestamp = (value: unknown): string | null => {
+        if (value === null || value === undefined) return null
+        const ms = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
+        if (!Number.isFinite(ms)) return null
+        return new Date(ms).toISOString()
+      }
+
+      for (const row of (latestLogs.results || []) as { shelter_id: string; errors: unknown; started_at: unknown; finished_at: unknown }[]) {
         try {
-          const errors = JSON.parse(row.errors || "[]")
+          const raw = row.errors
+          const errors = Array.isArray(raw) ? raw : JSON.parse((raw as string) || "[]")
           errorMap.set(row.shelter_id, errors.length > 0 ? errors[0] : null)
         } catch {
           errorMap.set(row.shelter_id, null)
         }
+
+        startedAtMap.set(row.shelter_id, toIsoTimestamp(row.started_at))
+        finishedAtMap.set(row.shelter_id, toIsoTimestamp(row.finished_at))
       }
 
       const sheltersWithErrors = shelterData.map(s => ({
         ...s,
         active: s.status === "active",
-        lastError: errorMap.get(s.id) || null
+        lastError: errorMap.get(s.id) || null,
+        syncStartedAt: startedAtMap.get(s.id) || null,
+        syncFinishedAt: finishedAtMap.get(s.id) || null
       }))
 
       const stats = {
@@ -349,19 +365,37 @@ const routes: Route[] = [
       const status = url.searchParams.get("status")
       if (!status) return yield* json({ error: "Status is required" }, 400)
       
-      const shelterId = url.searchParams.get("shelterId")
+      const shelterId = url.searchParams.get("shelterId") ?? url.searchParams.get("shelter")
       const search = url.searchParams.get("search")
+      const sortByParam = url.searchParams.get("sortBy") ?? "createdAt"
+      const sortOrderParam = url.searchParams.get("sortOrder") ?? "desc"
       const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50") || 50, 200)
       const offset = Math.max(parseInt(url.searchParams.get("offset") ?? "0") || 0, 0)
 
-      const filters: SQL[] = [eq(dogs.status, status as any)]
+      const validStatuses = new Set(["all", "pending", "available", "adopted", "reserved", "removed"])
+      if (!validStatuses.has(status)) return yield* json({ error: "Invalid status" }, 400)
+
+      const sortColumns = {
+        createdAt: dogs.createdAt,
+        updatedAt: dogs.updatedAt,
+        lastSeenAt: dogs.lastSeenAt,
+        name: dogs.name,
+      } as const
+      const sortColumn = sortColumns[sortByParam as keyof typeof sortColumns]
+      if (!sortColumn) return yield* json({ error: "Invalid sortBy" }, 400)
+
+      const sortOrder = sortOrderParam === "asc" || sortOrderParam === "desc" ? sortOrderParam : "desc"
+      const orderBy = sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn)
+
+      const filters: SQL[] = []
+      if (status !== "all") filters.push(eq(dogs.status, status as any))
       if (shelterId) filters.push(eq(dogs.shelterId, shelterId))
       if (search) filters.push(like(dogs.name, `%${search}%`))
 
       const results = yield* Effect.tryPromise({
         try: () => db.select().from(dogs)
-          .where(and(...filters))
-          .orderBy(desc(dogs.updatedAt))
+          .where(filters.length > 0 ? and(...filters) : undefined)
+          .orderBy(orderBy)
           .limit(limit)
           .offset(offset)
           .all(),
@@ -369,7 +403,7 @@ const routes: Route[] = [
       })
 
       const total = yield* Effect.tryPromise({
-        try: () => db.select({ count: sql<number>`count(*)` }).from(dogs).where(and(...filters)).get(),
+        try: () => db.select({ count: sql<number>`count(*)` }).from(dogs).where(filters.length > 0 ? and(...filters) : undefined).get(),
         catch: (e) => new DatabaseError({ operation: "adminListDogsCount", cause: e })
       })
 
@@ -422,10 +456,22 @@ const routes: Route[] = [
         catch: (e) => new DatabaseError({ operation: "getShelter", cause: e })
       })
 
-      // Transform to expected shape
-      const photos = (dog.photos as string[] | null) ?? []
-      const photosGenerated = (dog.photosGenerated as any[] | null) ?? []
-      
+     // Transform to expected shape
+     const photos = (dog.photos as string[] | null) ?? []
+      const photosGenerated = (dog.photosGenerated as string[] | null) ?? []
+
+      const professionalPhotos: string[] = []
+      const nosePhotos: string[] = []
+      for (const url of photosGenerated) {
+        if (url.endsWith("-nose") || url.includes("-nose.")) {
+          nosePhotos.push(url)
+        } else if (url.endsWith("-professional") || url.includes("-professional.")) {
+          professionalPhotos.push(url)
+        } else {
+          professionalPhotos.push(url)
+        }
+      }
+
       return yield* json({
         id: dog.id,
         name: dog.name,
@@ -442,8 +488,8 @@ const routes: Route[] = [
         healthStatus: null,
         photos: {
           original: photos,
-          professional: photosGenerated as string[],
-          nose: [] as string[]
+          professional: professionalPhotos,
+          nose: nosePhotos
         },
         createdAt: dog.createdAt,
         lastSeenAt: dog.lastSeenAt,
@@ -688,12 +734,12 @@ const routes: Route[] = [
       return yield* json({ success: true })
     }),
   },
-  {
-    method: "POST",
-    pattern: new URLPattern({ pathname: "/admin/dogs/:id/regenerate" }),
-    handler: Effect.fn("api.adminRegenerateDog")(function* (req, env, params) {
-      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
-      const body = yield* Effect.tryPromise({
+ {
+   method: "POST",
+   pattern: new URLPattern({ pathname: "/admin/dogs/:id/regenerate" }),
+   handler: Effect.fn("api.adminRegenerateDog")(function* (req, env, params) {
+     if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+     const body = yield* Effect.tryPromise({
         try: () => req.json() as Promise<{ target: "bio" | "photos" | "all" }>,
         catch: (e) => new DatabaseError({ operation: "parseBody", cause: e })
       })
@@ -706,31 +752,66 @@ const routes: Route[] = [
 
       if (!dog) return yield* json({ error: "Dog not found" }, 404)
 
-      if ((body.target === "photos" || body.target === "all") && env.IMAGE_QUEUE) {
+      const regeneratePhotos = body.target === "photos" || body.target === "all"
+      if (regeneratePhotos && env.IMAGE_QUEUE) {
         const externalUrls = (dog.photos || []).filter((p: string) => p.startsWith("http"))
         if (externalUrls.length > 0) {
+          const job: { dogId: string; urls: string[] } = {
+            dogId: dog.id,
+            urls: externalUrls
+          }
           yield* Effect.tryPromise({
-            try: () => env.IMAGE_QUEUE!.send({ dogId: dog.id, urls: externalUrls }),
+            try: () => env.IMAGE_QUEUE!.send(job),
             catch: (e) => new QueueError({ operation: "enqueue image job", cause: e })
           })
         }
       }
 
-      if ((body.target === "bio" || body.target === "all") && env.REINDEX_QUEUE) {
-        // TODO: regenerate-bio type is not handled by embedder yet
-        // This will be silently dropped until embedder is updated to handle it
-        yield* Effect.tryPromise({
-          try: () => env.REINDEX_QUEUE!.send({
-            type: "regenerate-bio",
-            dogId: dog.id
-          }),
-          catch: (e) => new QueueError({ operation: "enqueue regenerate bio", cause: e })
-        })
-      }
-
       return yield* json({ 
         success: true, 
-        message: body.target === "bio" ? "Bio regeneration not yet implemented" : "Regeneration queued" 
+        message: body.target === "bio"
+          ? "Bio regeneration is not implemented yet"
+          : body.target === "all"
+            ? "Photo regeneration queued (bio regeneration not implemented yet)"
+            : "Photo regeneration queued"
+      })
+    }),
+  },
+  {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/admin/shelters" }),
+    handler: Effect.fn("api.adminListShelters")(function* (req, env) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const db = drizzle(env.DB)
+      const results = yield* Effect.tryPromise({
+        try: () => db.select({
+          id: shelters.id,
+          slug: shelters.slug,
+          name: shelters.name,
+          url: shelters.url,
+          city: shelters.city,
+          region: shelters.region,
+          phone: shelters.phone,
+          email: shelters.email,
+          lat: shelters.lat,
+          lng: shelters.lng,
+          status: shelters.status,
+          lastSync: shelters.lastSync,
+          dogCount: sql<number>`count(${dogs.id})`,
+        })
+          .from(shelters)
+          .leftJoin(dogs, eq(shelters.id, dogs.shelterId))
+          .groupBy(shelters.id)
+          .orderBy(shelters.name)
+          .all(),
+        catch: (e) => new DatabaseError({ operation: "adminListShelters", cause: e })
+      })
+
+      return yield* json({
+        shelters: results.map(s => ({
+          ...s,
+          active: s.status === "active"
+        }))
       })
     }),
   },
@@ -762,19 +843,113 @@ const routes: Route[] = [
     }),
   },
   {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/admin/shelters/:id" }),
+    handler: Effect.fn("api.adminGetShelter")(function* (req, env, params) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const db = drizzle(env.DB)
+      const shelter = yield* Effect.tryPromise({
+        try: () => db.select().from(shelters).where(eq(shelters.id, params.id)).get(),
+        catch: (e) => new DatabaseError({ operation: "getShelter", cause: e })
+      })
+
+      if (!shelter) return yield* json({ error: "Shelter not found" }, 404)
+
+      const dogCount = yield* Effect.tryPromise({
+        try: () => db.select({ count: sql<number>`count(*)` }).from(dogs).where(eq(dogs.shelterId, params.id)).get(),
+        catch: (e) => new DatabaseError({ operation: "getShelterDogCount", cause: e })
+      })
+
+      const logs = yield* Effect.tryPromise({
+        try: () => db.select().from(syncLogs)
+          .where(eq(syncLogs.shelterId, params.id))
+          .orderBy(desc(syncLogs.startedAt))
+          .limit(50)
+          .all(),
+        catch: (e) => new DatabaseError({ operation: "getShelterSyncLogs", cause: e })
+      })
+
+      return yield* json({
+        shelter: {
+          ...shelter,
+          active: shelter.status === "active",
+          dogCount: dogCount?.count ?? 0,
+        },
+        syncLogs: logs,
+      })
+    }),
+  },
+  {
     method: "PUT",
     pattern: new URLPattern({ pathname: "/admin/shelters/:id" }),
     handler: Effect.fn("api.adminUpdateShelter")(function* (req, env, params) {
       if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
       const body = yield* Effect.tryPromise({
-        try: () => req.json() as Promise<{ active?: boolean }>,
+        try: () => req.json() as Promise<{
+          name?: string
+          url?: string
+          city?: string
+          region?: string | null
+          phone?: string | null
+          email?: string | null
+          lat?: number | null
+          lng?: number | null
+          active?: boolean
+        }>,
         catch: (e) => new DatabaseError({ operation: "parseBody", cause: e })
       })
 
       const db = drizzle(env.DB)
-      const update: any = {}
+      const update: Record<string, unknown> = {}
       if (typeof body.active === "boolean") {
         update.status = body.active ? "active" : "inactive"
+      }
+      if (typeof body.name === "string") {
+        const value = body.name.trim()
+        if (!value) return yield* json({ error: "Name cannot be empty" }, 400)
+        update.name = value
+      }
+      if (typeof body.url === "string") {
+        const value = body.url.trim()
+        if (!value) return yield* json({ error: "URL cannot be empty" }, 400)
+        update.url = value
+      }
+      if (typeof body.city === "string") {
+        const value = body.city.trim()
+        if (!value) return yield* json({ error: "City cannot be empty" }, 400)
+        update.city = value
+      }
+      if (body.region === null) {
+        update.region = null
+      } else if (typeof body.region === "string") {
+        const value = body.region.trim()
+        update.region = value ? value : null
+      }
+      if (body.phone === null) {
+        update.phone = null
+      } else if (typeof body.phone === "string") {
+        const value = body.phone.trim()
+        update.phone = value ? value : null
+      }
+      if (body.email === null) {
+        update.email = null
+      } else if (typeof body.email === "string") {
+        const value = body.email.trim()
+        update.email = value ? value : null
+      }
+      if (body.lat === null) {
+        update.lat = null
+      } else if (typeof body.lat === "number" && Number.isFinite(body.lat)) {
+        update.lat = body.lat
+      }
+      if (body.lng === null) {
+        update.lng = null
+      } else if (typeof body.lng === "number" && Number.isFinite(body.lng)) {
+        update.lng = body.lng
+      }
+
+      if (Object.keys(update).length === 0) {
+        return yield* json({ error: "No fields to update" }, 400)
       }
 
       const result = yield* Effect.tryPromise({
@@ -1007,6 +1182,108 @@ const routes: Route[] = [
       })
     }),
   },
+  {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/admin/costs" }),
+    handler: Effect.fn("api.adminCosts")(function* (req, env) {
+      if (!isAuthorized(req, env)) { return yield* json({ error: "Unauthorized" }, 401) }
+      const url = new URL(req.url)
+      const db = drizzle(env.DB)
+      
+      const fromStr = url.searchParams.get("from")
+      const toStr = url.searchParams.get("to")
+      const groupByParam = url.searchParams.get("groupBy")
+      
+      const from = fromStr 
+        ? new Date(fromStr) 
+        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      const to = toStr 
+        ? new Date(toStr) 
+        : new Date()
+
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+        return yield* json({ error: "Invalid from/to" }, 400)
+      }
+
+      const groupBy = groupByParam === "day" || groupByParam === "model" || groupByParam === "operation"
+        ? groupByParam
+        : "day"
+
+      const rangeFilter = and(
+        sql`${apiCosts.createdAt} >= ${from.getTime()}`,
+        sql`${apiCosts.createdAt} <= ${to.getTime()}`
+      )
+
+      const totalData = yield* Effect.tryPromise({
+        try: () => db.select({
+          costUsd: sql<number>`SUM(${apiCosts.costUsd})`,
+          calls: sql<number>`COUNT(*)`,
+          tokens: sql<number>`SUM(${apiCosts.inputTokens} + ${apiCosts.outputTokens})`
+        })
+        .from(apiCosts)
+        .where(rangeFilter)
+        .get(),
+        catch: (e) => new DatabaseError({ operation: "adminCostsTotal", cause: e })
+      })
+
+      const totals = {
+        costUsd: sql<number>`SUM(${apiCosts.costUsd})`,
+        calls: sql<number>`COUNT(*)`,
+        tokens: sql<number>`SUM(${apiCosts.inputTokens} + ${apiCosts.outputTokens})`,
+      } as const
+
+      const breakdown: CostsResponse["breakdown"] =
+        groupBy === "day"
+          ? yield* Effect.tryPromise({
+              try: () => {
+                const dateExpr = sql<string>`strftime('%Y-%m-%d', ${apiCosts.createdAt} / 1000, 'unixepoch')`
+                return db
+                  .select({ date: dateExpr, ...totals })
+                  .from(apiCosts)
+                  .where(rangeFilter)
+                  .groupBy(dateExpr)
+                  .orderBy(dateExpr)
+                  .all()
+              },
+              catch: (e) => new DatabaseError({ operation: "adminCostsBreakdown(day)", cause: e })
+            })
+          : groupBy === "model"
+          ? yield* Effect.tryPromise({
+              try: () =>
+                db
+                  .select({ model: apiCosts.model, ...totals })
+                  .from(apiCosts)
+                  .where(rangeFilter)
+                  .groupBy(apiCosts.model)
+                  .orderBy(desc(sql`SUM(${apiCosts.costUsd})`))
+                  .all(),
+              catch: (e) => new DatabaseError({ operation: "adminCostsBreakdown(model)", cause: e })
+            })
+          : yield* Effect.tryPromise({
+              try: () =>
+                db
+                  .select({ operation: apiCosts.operation, ...totals })
+                  .from(apiCosts)
+                  .where(rangeFilter)
+                  .groupBy(apiCosts.operation)
+                  .orderBy(desc(sql`SUM(${apiCosts.costUsd})`))
+                  .all(),
+              catch: (e) => new DatabaseError({ operation: "adminCostsBreakdown(operation)", cause: e })
+            })
+
+      const response: CostsResponse = {
+        groupBy,
+        total: {
+          costUsd: totalData?.costUsd ?? 0,
+          calls: totalData?.calls ?? 0,
+          tokens: totalData?.tokens ?? 0,
+        },
+        breakdown: breakdown ?? []
+      }
+
+      return yield* json(response)
+    }),
+  },
 ]
 
 const notFound = () => json({ error: "Not Found" }, 404)
@@ -1041,4 +1318,18 @@ export default {
 
     return Effect.runPromise(notFound() as any)
   },
+}
+
+interface CostsResponse {
+  groupBy: "day" | "operation" | "model"
+  total: {
+    costUsd: number
+    calls: number
+    tokens: number
+  }
+  breakdown: Array<
+    | { date: string; costUsd: number; calls: number; tokens: number }
+    | { operation: string; costUsd: number; calls: number; tokens: number }
+    | { model: string; costUsd: number; calls: number; tokens: number }
+  >
 }

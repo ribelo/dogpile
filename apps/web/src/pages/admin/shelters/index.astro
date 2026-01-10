@@ -1,0 +1,12 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro'
+import AdminSheltersList from '../../../components/admin/AdminSheltersList.tsx'
+
+const apiUrl = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
+// SECURITY: This page should be protected by Cloudflare Access
+const adminKey = import.meta.env.ADMIN_KEY ?? import.meta.env.PUBLIC_ADMIN_KEY ?? 'dev-admin-key-123'
+---
+
+<AdminLayout title="Shelters">
+  <AdminSheltersList client:load apiUrl={apiUrl} adminKey={adminKey} />
+</AdminLayout>

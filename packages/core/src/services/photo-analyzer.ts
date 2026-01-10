@@ -5,6 +5,7 @@ import { PhotoExtractionSchema, type PhotoExtraction } from "../schemas/photo-ex
 import { toJsonSchema } from "../schemas/json-schema.js"
 import { BREEDS } from "../domain/breed.js"
 import { ExtractionError } from "./ai-extraction.js"
+import { logOpenRouterUsage } from "./api-cost-tracker.js"
 import promptTemplate from "../../prompts/photo-analysis.md" with { type: "text" }
 import type { ChatMessage } from "./openrouter/types.js"
 
@@ -57,6 +58,13 @@ export class PhotoAnalyzer extends Context.Tag("@dogpile/PhotoAnalyzer")<
             .pipe(
               Effect.mapError((e) => new ExtractionError({ source: "photo", cause: e, message: String(e) }))
             )
+
+          yield* logOpenRouterUsage({
+            operation: "photo_analysis",
+            model: config.photoAnalysisModel,
+            inputTokens: response.usage?.prompt_tokens ?? 0,
+            outputTokens: response.usage?.completion_tokens ?? 0,
+          })
 
           const textContent = response.choices[0]?.message?.content
           if (!textContent) {

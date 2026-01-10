@@ -80,7 +80,7 @@ async function updateStatus(apiUrl: string, adminKey: string, dogId: string, sta
   if (!response.ok) throw new Error("Failed to update status")
 }
 
-async function regenerate(apiUrl: string, adminKey: string, dogId: string, target: string): Promise<void> {
+async function regenerate(apiUrl: string, adminKey: string, dogId: string, target: string): Promise<{ message?: string }> {
   const response = await fetch(`${apiUrl}/admin/dogs/${dogId}/regenerate`, {
     method: "POST",
     headers: { 
@@ -90,6 +90,11 @@ async function regenerate(apiUrl: string, adminKey: string, dogId: string, targe
     body: JSON.stringify({ target })
   })
   if (!response.ok) throw new Error("Failed to regenerate")
+  try {
+    return await response.json()
+  } catch {
+    return {}
+  }
 }
 
 interface ViewingPhoto {
@@ -195,8 +200,8 @@ export default function AdminDogEdit(props: Props) {
 
   async function handleRegenerate(target: string) {
     try {
-      await regenerate(props.apiUrl, props.adminKey, props.dogId, target)
-      setMessage(`${target} regeneration queued`)
+      const response = await regenerate(props.apiUrl, props.adminKey, props.dogId, target)
+      setMessage(response.message || `${target} regeneration queued`)
       setTimeout(() => setMessage(null), 3000)
     } catch (e) {
       setMessage("Regeneration failed")
@@ -474,12 +479,12 @@ export default function AdminDogEdit(props: Props) {
                       </button>
                       
                       <div class="absolute bottom-4 left-0 right-0 text-center text-white text-sm bg-black/50 py-1">
-                        {photo().category} • {photo().index + 1} / {d().photos[photo().category].length}
-                      </div>
+                      {photo().category} • {photo().index + 1} / {d().photos[photo().category].length}
                     </div>
                   </div>
-                )}
-              </Show>
+                </div>
+              )}
+            </Show>
             </>
           )
         }}

@@ -6,6 +6,7 @@ import { TextExtractionSchema, type TextExtraction } from "../schemas/text-extra
 import { toJsonSchema } from "../schemas/json-schema.js"
 import { BREEDS } from "../domain/breed.js"
 import { ExtractionError } from "./ai-extraction.js"
+import { logOpenRouterUsage } from "./api-cost-tracker.js"
 import promptTemplate from "../../prompts/text-extraction.md" with { type: "text" }
 import type { ChatMessage } from "./openrouter/types.js"
 
@@ -59,6 +60,13 @@ export class TextExtractor extends Context.Tag("@dogpile/TextExtractor")<
               .pipe(
                 Effect.mapError((e) => new ExtractionError({ source: "text", cause: e, message: String(e) }))
               )
+
+            yield* logOpenRouterUsage({
+              operation: "text_extraction",
+              model: config.textExtractionModel,
+              inputTokens: response.usage?.prompt_tokens ?? 0,
+              outputTokens: response.usage?.completion_tokens ?? 0,
+            })
 
             const textContent = response.choices[0]?.message?.content
             if (!textContent) {

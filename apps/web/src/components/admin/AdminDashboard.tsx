@@ -1,4 +1,8 @@
-import { createResource, createSignal, For, Show } from "solid-js"
+import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js"
+import Check from "lucide-solid/icons/check"
+import LoaderCircle from "lucide-solid/icons/loader-circle"
+import TriangleAlert from "lucide-solid/icons/triangle-alert"
+import CostStats from "./CostStats"
 
 interface DogStats {
   pending: number
@@ -15,6 +19,8 @@ interface Shelter {
   dogCount: number
   lastSync: string | null
   lastError: string | null
+  syncStartedAt: string | null
+  syncFinishedAt: string | null
 }
 
 interface StatsResponse {
@@ -62,11 +68,30 @@ export default function AdminDashboard(props: Props) {
   const [stats, { refetch }] = createResource(() => fetchStats(props.apiUrl, props.adminKey))
   const [scraping, setScraping] = createSignal<string | null>(null)
 
+  const stalledAfterMs = 60 * 60 * 1000
+  const pollEveryMs = 5000
+
+  const syncState = (shelter: Shelter): "idle" | "syncing" | "stalled" => {
+    if (!shelter.syncStartedAt || shelter.syncFinishedAt) return "idle"
+    const startedAtMs = new Date(shelter.syncStartedAt).getTime()
+    if (!Number.isFinite(startedAtMs)) return "idle"
+    return Date.now() - startedAtMs > stalledAfterMs ? "stalled" : "syncing"
+  }
+
+  createEffect(() => {
+    const data = stats()
+    if (!data) return
+    const shouldPoll = data.shelters.some(s => syncState(s) !== "idle")
+    if (!shouldPoll) return
+    const interval = setInterval(() => refetch(), pollEveryMs)
+    onCleanup(() => clearInterval(interval))
+  })
+
   async function handleScrape(shelterId: string) {
     setScraping(shelterId)
     try {
       await triggerScrape(props.apiUrl, props.adminKey, shelterId)
-      setTimeout(() => refetch(), 2000)
+      refetch()
     } catch (e) {
       console.error("Scrape failed:", e)
     } finally {
@@ -135,22 +160,45 @@ export default function AdminDashboard(props: Props) {
                             </a>
                           </td>
                           <td class="px-6 py-4">{shelter.dogCount}</td>
-                          <td class="px-6 py-4 text-gray-500">{formatRelativeTime(shelter.lastSync)}</td>
-                          <td class="px-6 py-4">
-                            <Show 
-                            when={shelter.lastError} 
-                            fallback={<span class="text-green-600 flex items-center gap-1"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> OK</span>}
+                         <td class="px-6 py-4 text-gray-500">
+                            <Show
+                              when={syncState(shelter) !== "idle"}
+                              fallback={formatRelativeTime(shelter.syncFinishedAt ?? shelter.lastSync)}
+                            >
+                              Started {formatRelativeTime(shelter.syncStartedAt)}
+                            </Show>
+                          </td>
+                         <td class="px-6 py-4">
+                          <Show
+                            when={syncState(shelter) === "syncing"}
+                            fallback={
+                              <Show
+                                when={syncState(shelter) === "stalled"}
+                                fallback={
+                                  <Show
+                                    when={shelter.lastError}
+                                    fallback={<span class="text-green-600 flex items-center gap-1"><Check size={14} /> Finished</span>}
+                                  >
+                                    <span class="text-red-600 flex items-center gap-1" title={shelter.lastError ?? ""}><TriangleAlert size={14} /> Finished (Error)</span>
+                                  </Show>
+                                }
+                              >
+                                <span class="text-orange-600 flex items-center gap-1" title={shelter.syncStartedAt ?? ""}><TriangleAlert size={14} /> Stalled</span>
+                              </Show>
+                            }
                           >
-                            <span class="text-red-600 flex items-center gap-1" title={shelter.lastError ?? ""}><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> Error</span>
+                            <span class="text-blue-600 flex items-center gap-1" title={shelter.syncStartedAt ?? ""}>
+                              <LoaderCircle size={14} class="animate-spin" /> Syncing
+                            </span>
                           </Show>
                           </td>
                           <td class="px-6 py-4">
                             <button
                               onClick={() => handleScrape(shelter.id)}
-                              disabled={scraping() === shelter.id}
+                              disabled={scraping() === shelter.id || syncState(shelter) !== "idle"}
                               class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
                             >
-                              {scraping() === shelter.id ? "Scraping..." : "Scrape Now"}
+                              {scraping() === shelter.id ? "Scraping..." : syncState(shelter) === "idle" ? "Scrape Now" : "In Progress"}
                             </button>
                           </td>
                         </tr>
@@ -160,6 +208,9 @@ export default function AdminDashboard(props: Props) {
                 </table>
               </div>
             </div>
+
+            {/* Costs Section */}
+            <CostStats apiUrl={props.apiUrl} adminKey={props.adminKey} />
           </>
         )}
       </Show>

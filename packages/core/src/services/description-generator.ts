@@ -3,6 +3,7 @@ import { OpenRouterClient } from "./openrouter/client.js"
 import { aiConfig } from "../config/ai.js"
 import { DogBioSchema, type DogBio } from "../schemas/dog-bio.js"
 import { toJsonSchema } from "../schemas/json-schema.js"
+import { logOpenRouterUsage } from "./api-cost-tracker.js"
 import promptTemplate from "../../prompts/description-gen.md" with { type: "text" }
 import type { ChatMessage } from "./openrouter/types.js"
 
@@ -67,6 +68,13 @@ export class DescriptionGenerator extends Context.Tag("@dogpile/DescriptionGener
               .pipe(
                 Effect.mapError((e) => new GenerationError({ cause: e, message: String(e) }))
               )
+
+            yield* logOpenRouterUsage({
+              operation: "description_generation",
+              model: config.descriptionGenModel,
+              inputTokens: response.usage?.prompt_tokens ?? 0,
+              outputTokens: response.usage?.completion_tokens ?? 0,
+            })
 
             const textContent = response.choices[0]?.message?.content
             if (!textContent) {

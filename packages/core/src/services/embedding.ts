@@ -2,6 +2,7 @@ import { Context, Effect, Layer } from "effect"
 import { EmbeddingError } from "../domain/errors.js"
 import { OpenRouterClient } from "./openrouter/client.js"
 import { aiConfig } from "../config/ai.js"
+import { logOpenRouterUsage } from "./api-cost-tracker.js"
 
 export class EmbeddingService extends Context.Tag("@dogpile/EmbeddingService")<
   EmbeddingService,
@@ -24,6 +25,14 @@ export class EmbeddingService extends Context.Tag("@dogpile/EmbeddingService")<
             model: config.embeddingModel,
             input: text,
           }).pipe(
+            Effect.tap((result) =>
+              logOpenRouterUsage({
+                operation: "embedding",
+                model: config.embeddingModel,
+                inputTokens: result.usage.prompt_tokens,
+                outputTokens: 0,
+              })
+            ),
             Effect.map((result) => result.data[0].embedding),
             Effect.mapError((err) =>
               new EmbeddingError({ cause: err, message: "Embedding failed" })
@@ -35,6 +44,14 @@ export class EmbeddingService extends Context.Tag("@dogpile/EmbeddingService")<
             model: config.embeddingModel,
             input: [...texts],
           }).pipe(
+            Effect.tap((result) =>
+              logOpenRouterUsage({
+                operation: "embedding",
+                model: config.embeddingModel,
+                inputTokens: result.usage.prompt_tokens,
+                outputTokens: 0,
+              })
+            ),
             Effect.map((result) => result.data.map((d) => d.embedding)),
             Effect.mapError((err) =>
               new EmbeddingError({ cause: err, message: "Batch embedding failed" })

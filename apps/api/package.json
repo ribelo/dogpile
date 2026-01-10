@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --port 8787 --inspector-port 9230",
-    "dev:local": "wrangler dev --port 8787",
+    "dev": "wrangler d1 migrations apply dogpile-db --local && wrangler dev --port 8787 --inspector-port 9230",
+    "dev:local": "wrangler d1 migrations apply dogpile-db --local && wrangler dev --port 8787",
     "build": "bun build src/index.ts --outdir dist --target browser --minify",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit"
