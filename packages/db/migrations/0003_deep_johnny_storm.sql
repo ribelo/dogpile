@@ -1,0 +1,1 @@
+ALTER TABLE `sync_logs` ADD `error_message` text;

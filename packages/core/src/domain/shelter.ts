@@ -14,6 +14,7 @@ export const Shelter = Schema.Struct({
   lng: Schema.NullOr(Schema.Number),
   phone: Schema.NullOr(Schema.String),
   email: Schema.NullOr(Schema.String),
+  active: Schema.Boolean,
   status: ShelterStatus,
   lastSync: Schema.NullOr(Schema.Date),
 })

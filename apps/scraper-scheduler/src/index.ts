@@ -2,7 +2,7 @@ import { Effect } from "effect"
 import { Schema } from "effect"
 import { drizzle } from "drizzle-orm/d1"
 import { shelters } from "@dogpile/db"
-import { lt, eq, or, isNull } from "drizzle-orm"
+import { lt, eq, or, isNull, and } from "drizzle-orm"
 
 class SchedulerError extends Schema.TaggedError<SchedulerError>()("SchedulerError", {
   operation: Schema.String,
@@ -38,9 +38,12 @@ export default {
             .select()
             .from(shelters)
             .where(
-              or(
-                isNull(shelters.lastSync),
-                lt(shelters.lastSync, threshold),
+              and(
+                eq(shelters.active, true),
+                or(
+                  isNull(shelters.lastSync),
+                  lt(shelters.lastSync, threshold),
+                )
               )
             )
             .all(),

@@ -277,6 +277,7 @@ const routes: Route[] = [
           id: shelters.id,
           name: shelters.name,
           slug: shelters.slug,
+          active: shelters.active,
           status: shelters.status,
           lastSync: shelters.lastSync,
           dogCount: sql<number>`count(${dogs.id})`
@@ -291,7 +292,7 @@ const routes: Route[] = [
       // Get latest sync log errors for all shelters in one query
       const latestLogs = yield* Effect.tryPromise({
         try: () => env.DB.prepare(`
-          SELECT sl.shelter_id, sl.errors, sl.started_at, sl.finished_at
+          SELECT sl.shelter_id, sl.errors, sl.error_message, sl.started_at, sl.finished_at
           FROM sync_logs sl
           INNER JOIN (
             SELECT shelter_id, MAX(started_at) as max_at
@@ -313,13 +314,19 @@ const routes: Route[] = [
         return new Date(ms).toISOString()
       }
 
-      for (const row of (latestLogs.results || []) as { shelter_id: string; errors: unknown; started_at: unknown; finished_at: unknown }[]) {
-        try {
-          const raw = row.errors
-          const errors = Array.isArray(raw) ? raw : JSON.parse((raw as string) || "[]")
-          errorMap.set(row.shelter_id, errors.length > 0 ? errors[0] : null)
-        } catch {
-          errorMap.set(row.shelter_id, null)
+      for (const row of (latestLogs.results || []) as { shelter_id: string; errors: unknown; error_message: unknown; started_at: unknown; finished_at: unknown }[]) {
+        const rawMessage = row.error_message
+
+        if (typeof rawMessage === "string" && rawMessage.trim().length > 0) {
+          errorMap.set(row.shelter_id, rawMessage)
+        } else {
+          try {
+            const raw = row.errors
+            const errors = Array.isArray(raw) ? raw : JSON.parse((raw as string) || "[]")
+            errorMap.set(row.shelter_id, errors.length > 0 ? errors[0] : null)
+          } catch {
+            errorMap.set(row.shelter_id, null)
+          }
         }
 
         startedAtMap.set(row.shelter_id, toIsoTimestamp(row.started_at))
@@ -328,7 +335,7 @@ const routes: Route[] = [
 
       const sheltersWithErrors = shelterData.map(s => ({
         ...s,
-        active: s.status === "active",
+        active: s.active,
         lastError: errorMap.get(s.id) || null,
         syncStartedAt: startedAtMap.get(s.id) || null,
         syncFinishedAt: finishedAtMap.get(s.id) || null
@@ -795,6 +802,7 @@ const routes: Route[] = [
           email: shelters.email,
           lat: shelters.lat,
           lng: shelters.lng,
+          active: shelters.active,
           status: shelters.status,
           lastSync: shelters.lastSync,
           dogCount: sql<number>`count(${dogs.id})`,
@@ -810,7 +818,7 @@ const routes: Route[] = [
       return yield* json({
         shelters: results.map(s => ({
           ...s,
-          active: s.status === "active"
+          active: s.active,
         }))
       })
     }),
@@ -872,7 +880,7 @@ const routes: Route[] = [
       return yield* json({
         shelter: {
           ...shelter,
-          active: shelter.status === "active",
+          active: shelter.active,
           dogCount: dogCount?.count ?? 0,
         },
         syncLogs: logs,
@@ -902,6 +910,7 @@ const routes: Route[] = [
       const db = drizzle(env.DB)
       const update: Record<string, unknown> = {}
       if (typeof body.active === "boolean") {
+        update.active = body.active
         update.status = body.active ? "active" : "inactive"
       }
       if (typeof body.name === "string") {

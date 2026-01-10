@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Schema } from "effect"
+import { Cause, Effect, Layer, Option, Schema } from "effect"
 import { FetchHttpClient } from "@effect/platform"
 import { drizzle } from "drizzle-orm/d1"
 import { apiCosts, dogs, shelters, syncLogs } from "@dogpile/db"
@@ -125,6 +125,7 @@ export const processMessageBase = (
             .set({
               finishedAt: new Date(),
               errors: [errorMessage],
+              errorMessage,
             })
             .where(eq(syncLogs.id, syncLogId)),
           catch: (e) => new DatabaseError({ operation: "update sync log (circuit breaker)", cause: e }),
@@ -384,7 +385,31 @@ export const processMessageBase = (
   )
 
   message.ack()
-})
+}).pipe(
+  Effect.catchAllCause((cause) =>
+    Effect.gen(function* () {
+      const messageText = Cause.pretty(cause).split("\n")[0]?.trim() || "Unknown error"
+
+      yield* Effect.logError(`Scrape failed: ${messageText}`)
+
+      const db = drizzle(env.DB)
+      yield* Effect.tryPromise({
+        try: () =>
+          db
+            .update(syncLogs)
+            .set({
+              finishedAt: new Date(),
+              errors: [messageText],
+              errorMessage: messageText,
+            })
+            .where(eq(syncLogs.id, syncLogId)),
+        catch: (e) => new DatabaseError({ operation: "update sync log (error)", cause: e }),
+      }).pipe(Effect.catchAll(() => Effect.void))
+
+      message.ack()
+    })
+  )
+)
 
 const processMessage = (message: Message<ScrapeJob>, env: Env) => {
   const syncLogId = crypto.randomUUID()
@@ -428,24 +453,6 @@ const processMessage = (message: Message<ScrapeJob>, env: Env) => {
         ),
         OpenRouterClient.Live
       )
-    ),
-    Effect.catchAll((error) =>
-      Effect.gen(function* () {
-        yield* Effect.logError(`Scrape failed: ${error}`)
-        const db = drizzle(env.DB)
-        yield* Effect.tryPromise({
-          try: () =>
-            db
-              .update(syncLogs)
-              .set({
-                finishedAt: new Date(),
-                errors: [String(error)],
-              })
-              .where(eq(syncLogs.id, syncLogId)),
-          catch: (e) => new DatabaseError({ operation: "update sync log (error)", cause: e })
-        }).pipe(Effect.catchAll(() => Effect.void))
-        message.ack()
-      })
     ),
     Effect.withSpan("scraper.processMessage")
   )

@@ -25,6 +25,7 @@ export const shelters = sqliteTable("shelters", {
   lng: real("lng"),
   phone: text("phone"),
   email: text("email"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
   status: text("status", { enum: ["active", "inactive", "error"] }).notNull().default("active"),
   lastSync: integer("last_sync", { mode: "timestamp" }),
 }, (table) => [
@@ -108,6 +109,7 @@ export const syncLogs = sqliteTable("sync_logs", {
   dogsUpdated: integer("dogs_updated").notNull().default(0),
   dogsRemoved: integer("dogs_removed").notNull().default(0),
   errors: text("errors", { mode: "json" }).$type<string[]>().notNull().default([]),
+  errorMessage: text("error_message"),
 }, (table) => [
   index("sync_logs_shelter_id_idx").on(table.shelterId),
   index("sync_logs_started_at_idx").on(table.startedAt),

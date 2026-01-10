@@ -311,4 +311,29 @@ describe("Dog Lifecycle", () => {
       expect(updateCall).toBeDefined()
     })
   })
+
+  describe("Sync Log Errors", () => {
+    test("persists error_message on failure", async () => {
+      const prepareMock = mock((query: string) => createStmt([]))
+      mockEnv.DB.prepare = prepareMock
+
+      mockAdapter.fetch = mock(() => Effect.fail("boom"))
+
+      await Effect.runPromise(
+        processMessageBase(mockMessage, mockEnv, "log-1").pipe(
+          Effect.provide(Layer.mergeAll(TextExtractorLive, PhotoAnalyzerLive, DescriptionGeneratorLive))
+        )
+      )
+
+      expect(mockMessage.ack).toHaveBeenCalled()
+      expect(mockMessage.retry).not.toHaveBeenCalled()
+
+      const syncLogUpdate = prepareMock.mock.calls.find((call: any) =>
+        call[0].toLowerCase().includes("update") &&
+        call[0].toLowerCase().includes("sync_logs") &&
+        call[0].toLowerCase().includes("error_message")
+      )
+      expect(syncLogUpdate).toBeDefined()
+    })
+  })
 })
