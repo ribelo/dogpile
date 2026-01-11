@@ -1,4 +1,4 @@
-import { Cause, Effect, Layer, Option, Schema } from "effect"
+import { Cause, Effect, Layer, Option, Ref, Schema } from "effect"
 import { FetchHttpClient } from "@effect/platform"
 import { drizzle } from "drizzle-orm/d1"
 import { apiCosts, dogs, shelters, syncLogs } from "@dogpile/db"
@@ -26,6 +26,7 @@ interface Env {
   IMAGE_QUEUE: Queue<ImageJob>
   IMAGES: ImagesBinding
   OPENROUTER_API_KEY: string
+  SCRAPER_AI_CONCURRENCY?: string
 }
 
 interface ScrapeJob {
@@ -39,6 +40,28 @@ interface ReindexJob {
   type: "upsert" | "delete"
   dogId: string
   description?: string | undefined
+}
+
+// Config constants
+const MAX_COLLECTED_ERRORS = 20
+const PROGRESS_UPDATE_INTERVAL = 10
+const DEFAULT_CONCURRENCY = 5
+const MIN_CONCURRENCY = 1
+const MAX_CONCURRENCY = 10
+
+const parseAiConcurrency = (env: Env): number => {
+  const raw = env.SCRAPER_AI_CONCURRENCY
+  if (!raw) return DEFAULT_CONCURRENCY
+  const parsed = parseInt(raw, 10)
+  if (Number.isNaN(parsed)) return DEFAULT_CONCURRENCY
+  return Math.max(MIN_CONCURRENCY, Math.min(MAX_CONCURRENCY, parsed))
+}
+
+// Per-dog processing result
+interface DogResult {
+  type: "added" | "updated" | "error"
+  reindexJob?: ReindexJob
+  errorMessage?: string
 }
 
 export default {
@@ -66,6 +89,7 @@ export const processMessageBase = (
   const job = message.body
   const db = drizzle(env.DB)
   const adapter = getAdapter(job.shelterSlug)
+  const concurrency = parseAiConcurrency(env)
 
   if (!adapter) {
     yield* Effect.logError(`Unknown scraper: ${job.shelterSlug}`)
@@ -121,7 +145,7 @@ export const processMessageBase = (
 
   if (existingCount > 5 && scrapedCount < existingCount * threshold) {
     yield* Effect.logWarning(`Significant dog count drop: scraped ${scrapedCount} dogs, expected ~${existingCount}. Proceeding with caution.`)
-    
+
     if (scrapedCount < existingCount * 0.3) {
       const errorMessage = `Circuit breaker triggered: scraped ${scrapedCount} dogs, expected ~${existingCount}. Will retry.`
       yield* Effect.logWarning(errorMessage)
@@ -145,160 +169,216 @@ export const processMessageBase = (
   }
 
   const existingByFingerprint = new Map(existingDogs.map((d) => [d.fingerprint, d]))
-  const scrapedFingerprints = new Set(rawDogs.map((d) => d.fingerprint))
 
-  let added = 0
-  let updated = 0
-  const reindexJobs: ReindexJob[] = []
+  // Use Refs for mutable state across concurrent processing
+  const addedRef = yield* Ref.make(0)
+  const updatedRef = yield* Ref.make(0)
+  const reindexJobsRef = yield* Ref.make<ReindexJob[]>([])
+  const errorsRef = yield* Ref.make<string[]>([])
+  const processedCountRef = yield* Ref.make(0)
   const now = new Date()
 
-  for (const raw of rawDogs) {
-    const dog = yield* adapter.transform(raw, config)
-    const existing = existingByFingerprint.get(raw.fingerprint)
+  // Process a single dog, isolating failures
+  const processSingleDog = (raw: typeof rawDogs[number]): Effect.Effect<DogResult, never, TextExtractor | PhotoAnalyzer | DescriptionGenerator> =>
+    Effect.gen(function* () {
+      const dog = yield* adapter.transform(raw, config)
+      const existing = existingByFingerprint.get(raw.fingerprint)
 
-    if (!existing) {
-      // New dog - run AI extraction
-      const textExtractor = yield* TextExtractor
-      const photoAnalyzer = yield* PhotoAnalyzer
-      const descGenerator = yield* DescriptionGenerator
+      if (!existing) {
+        // New dog - run AI extraction
+        const textExtractor = yield* TextExtractor
+        const photoAnalyzer = yield* PhotoAnalyzer
+        const descGenerator = yield* DescriptionGenerator
 
-      const textResult = yield* textExtractor.extract(raw.rawDescription).pipe(
-        Effect.catchAll((e) =>
-          Effect.logWarning(`Text extraction failed: ${e}`).pipe(
-            Effect.map(() => null)
+        const textResult = yield* textExtractor.extract(raw.rawDescription).pipe(
+          Effect.catchAll((e) =>
+            Effect.logWarning(`Text extraction failed: ${e}`).pipe(
+              Effect.map(() => null)
+            )
           )
         )
-      )
 
-      const photoResult = raw.photos && raw.photos.length > 0
-        ? yield* photoAnalyzer.analyzeMultiple(raw.photos).pipe(
-            Effect.map(Option.some),
-            Effect.catchAll((e) =>
-              Effect.logWarning(`Photo analysis failed: ${e}`).pipe(
-                Effect.map(() => Option.none())
+        const photoResult = raw.photos && raw.photos.length > 0
+          ? yield* photoAnalyzer.analyzeMultiple(raw.photos).pipe(
+              Effect.map(Option.some),
+              Effect.catchAll((e) =>
+                Effect.logWarning(`Photo analysis failed: ${e}`).pipe(
+                  Effect.map(() => Option.none())
+                )
               )
             )
-          )
-        : Option.none()
+          : Option.none()
 
-      const bioResult = textResult
-        ? yield* descGenerator.generate({
-            name: raw.name,
-            sex: textResult.sex,
-            breedEstimates: [...textResult.breedEstimates],
-            ageMonths: textResult.ageEstimate?.months ?? null,
-            size: textResult.sizeEstimate?.value ?? null,
-            personalityTags: [...textResult.personalityTags],
-            goodWithKids: textResult.goodWithKids,
-            goodWithDogs: textResult.goodWithDogs,
-            goodWithCats: textResult.goodWithCats,
-            healthInfo: {
-              vaccinated: textResult.vaccinated,
-              sterilized: textResult.sterilized,
-            },
-          }).pipe(
-            Effect.catchAll((e) =>
-              Effect.logWarning(`Bio generation failed: ${e}`).pipe(
-                Effect.map(() => null)
+        const bioResult = textResult
+          ? yield* descGenerator.generate({
+              name: raw.name,
+              sex: textResult.sex,
+              breedEstimates: [...textResult.breedEstimates],
+              ageMonths: textResult.ageEstimate?.months ?? null,
+              size: textResult.sizeEstimate?.value ?? null,
+              personalityTags: [...textResult.personalityTags],
+              goodWithKids: textResult.goodWithKids,
+              goodWithDogs: textResult.goodWithDogs,
+              goodWithCats: textResult.goodWithCats,
+              healthInfo: {
+                vaccinated: textResult.vaccinated,
+                sterilized: textResult.sterilized,
+              },
+            }).pipe(
+              Effect.catchAll((e) =>
+                Effect.logWarning(`Bio generation failed: ${e}`).pipe(
+                  Effect.map(() => null)
+                )
               )
             )
-          )
-        : null
+          : null
 
-      const id = crypto.randomUUID()
-      yield* Effect.tryPromise({
-        try: () =>
-          db.insert(dogs).values({
-            id,
-            shelterId: dog.shelterId,
-            externalId: dog.externalId,
-            fingerprint: dog.fingerprint,
-            rawDescription: dog.rawDescription,
-            name: dog.name,
-            sex: (textResult?.sex ?? dog.sex) as "male" | "female" | "unknown" | null | undefined,
-            generatedBio: bioResult?.bio ?? dog.generatedBio,
-            locationName: textResult?.locationHints?.cityMention ?? dog.locationName,
-            locationCity: textResult?.locationHints?.cityMention ?? dog.locationCity,
-            locationLat: dog.locationLat,
-            locationLng: dog.locationLng,
-            isFoster: textResult?.locationHints?.isFoster ?? dog.isFoster,
-            breedEstimates: Option.isSome(photoResult)
-              ? [...photoResult.value.breedEstimates]
-              : textResult?.breedEstimates
-              ? [...textResult.breedEstimates]
-              : [],
-            sizeEstimate: textResult?.sizeEstimate ?? dog.sizeEstimate,
-            ageEstimate: textResult?.ageEstimate ?? dog.ageEstimate,
-            weightEstimate: textResult?.weightEstimate ?? dog.weightEstimate,
-            personalityTags: textResult?.personalityTags
-              ? [...textResult.personalityTags]
-              : [],
-            vaccinated: textResult?.vaccinated ?? dog.vaccinated,
-            sterilized: textResult?.sterilized ?? dog.sterilized,
-            chipped: textResult?.chipped ?? dog.chipped,
-            goodWithKids: textResult?.goodWithKids ?? dog.goodWithKids,
-            goodWithDogs: textResult?.goodWithDogs ?? dog.goodWithDogs,
-            goodWithCats: textResult?.goodWithCats ?? dog.goodWithCats,
-            furLength: (Option.isSome(photoResult)
-              ? photoResult.value.furLength
-              : dog.furLength) as "short" | "medium" | "long" | null | undefined,
-            furType: (Option.isSome(photoResult)
-              ? photoResult.value.furType
-              : dog.furType) as "smooth" | "wire" | "curly" | "double" | null | undefined,
-            colorPrimary: Option.isSome(photoResult)
-              ? photoResult.value.colorPrimary
-              : dog.colorPrimary,
-            colorSecondary: Option.isSome(photoResult)
-              ? photoResult.value.colorSecondary
-              : dog.colorSecondary,
-            colorPattern: (Option.isSome(photoResult)
-              ? photoResult.value.colorPattern
-              : dog.colorPattern) as "solid" | "spotted" | "brindle" | "merle" | "bicolor" | "tricolor" | "sable" | "tuxedo" | null | undefined,
-            earType: (Option.isSome(photoResult)
-              ? photoResult.value.earType
-              : dog.earType) as "floppy" | "erect" | "semi" | null | undefined,
-            tailType: (Option.isSome(photoResult)
-              ? photoResult.value.tailType
-              : dog.tailType) as "long" | "short" | "docked" | "curled" | null | undefined,
-            photos: dog.photos ? [...dog.photos] : [],
-            photosGenerated: dog.photosGenerated ? [...dog.photosGenerated] : [],
-            sourceUrl: dog.sourceUrl,
-            urgent: textResult?.urgent ?? dog.urgent ?? false,
-            status: "pending",
-            lastSeenAt: now,
-            createdAt: now,
-            updatedAt: now,
-          }),
-        catch: (e) => new DatabaseError({ operation: "insert dog", cause: e }),
-      })
-      reindexJobs.push({
-        type: "upsert",
-        dogId: id,
-        description: bioResult?.bio ?? dog.generatedBio ?? undefined,
-      })
+        const id = crypto.randomUUID()
+        yield* Effect.tryPromise({
+          try: () =>
+            db.insert(dogs).values({
+              id,
+              shelterId: dog.shelterId,
+              externalId: dog.externalId,
+              fingerprint: dog.fingerprint,
+              rawDescription: dog.rawDescription,
+              name: dog.name,
+              sex: (textResult?.sex ?? dog.sex) as "male" | "female" | "unknown" | null | undefined,
+              generatedBio: bioResult?.bio ?? dog.generatedBio,
+              locationName: textResult?.locationHints?.cityMention ?? dog.locationName,
+              locationCity: textResult?.locationHints?.cityMention ?? dog.locationCity,
+              locationLat: dog.locationLat,
+              locationLng: dog.locationLng,
+              isFoster: textResult?.locationHints?.isFoster ?? dog.isFoster,
+              breedEstimates: Option.isSome(photoResult)
+                ? [...photoResult.value.breedEstimates]
+                : textResult?.breedEstimates
+                ? [...textResult.breedEstimates]
+                : [],
+              sizeEstimate: textResult?.sizeEstimate ?? dog.sizeEstimate,
+              ageEstimate: textResult?.ageEstimate ?? dog.ageEstimate,
+              weightEstimate: textResult?.weightEstimate ?? dog.weightEstimate,
+              personalityTags: textResult?.personalityTags
+                ? [...textResult.personalityTags]
+                : [],
+              vaccinated: textResult?.vaccinated ?? dog.vaccinated,
+              sterilized: textResult?.sterilized ?? dog.sterilized,
+              chipped: textResult?.chipped ?? dog.chipped,
+              goodWithKids: textResult?.goodWithKids ?? dog.goodWithKids,
+              goodWithDogs: textResult?.goodWithDogs ?? dog.goodWithDogs,
+              goodWithCats: textResult?.goodWithCats ?? dog.goodWithCats,
+              furLength: (Option.isSome(photoResult)
+                ? photoResult.value.furLength
+                : dog.furLength) as "short" | "medium" | "long" | null | undefined,
+              furType: (Option.isSome(photoResult)
+                ? photoResult.value.furType
+                : dog.furType) as "smooth" | "wire" | "curly" | "double" | null | undefined,
+              colorPrimary: Option.isSome(photoResult)
+                ? photoResult.value.colorPrimary
+                : dog.colorPrimary,
+              colorSecondary: Option.isSome(photoResult)
+                ? photoResult.value.colorSecondary
+                : dog.colorSecondary,
+              colorPattern: (Option.isSome(photoResult)
+                ? photoResult.value.colorPattern
+                : dog.colorPattern) as "solid" | "spotted" | "brindle" | "merle" | "bicolor" | "tricolor" | "sable" | "tuxedo" | null | undefined,
+              earType: (Option.isSome(photoResult)
+                ? photoResult.value.earType
+                : dog.earType) as "floppy" | "erect" | "semi" | null | undefined,
+              tailType: (Option.isSome(photoResult)
+                ? photoResult.value.tailType
+                : dog.tailType) as "long" | "short" | "docked" | "curled" | null | undefined,
+              photos: dog.photos ? [...dog.photos] : [],
+              photosGenerated: dog.photosGenerated ? [...dog.photosGenerated] : [],
+              sourceUrl: dog.sourceUrl,
+              urgent: textResult?.urgent ?? dog.urgent ?? false,
+              status: "pending",
+              lastSeenAt: now,
+              createdAt: now,
+              updatedAt: now,
+            }),
+          catch: (e) => new DatabaseError({ operation: "insert dog", cause: e }),
+        })
 
-      if (dog.photos && dog.photos.length > 0) {
-        // Photo generation is currently manual-only (CLI), not part of the pipeline.
-        // This worker stores original photos; AI-generated photos are produced separately.
+        return {
+          type: "added" as const,
+          reindexJob: {
+            type: "upsert" as const,
+            dogId: id,
+            description: bioResult?.bio ?? dog.generatedBio ?? undefined,
+          },
+        }
+      } else {
+        const updates =
+          existing.status === "removed"
+            ? { lastSeenAt: now, status: "available" as const, updatedAt: now }
+            : { lastSeenAt: now }
+        yield* Effect.tryPromise({
+          try: () =>
+            db
+              .update(dogs)
+              .set(updates)
+              .where(eq(dogs.id, existing.id)),
+          catch: (e) => new DatabaseError({ operation: "update lastSeenAt", cause: e }),
+        })
+        return { type: "updated" as const }
       }
-
-      added++
-    } else {
-      const updates =
-        existing.status === "removed"
-          ? { lastSeenAt: now, status: "available" as const, updatedAt: now }
-          : { lastSeenAt: now }
-      yield* Effect.tryPromise({
-        try: () =>
-          db
-            .update(dogs)
-            .set(updates)
-            .where(eq(dogs.id, existing.id)),
-        catch: (e) => new DatabaseError({ operation: "update lastSeenAt", cause: e }),
+    }).pipe(
+      Effect.catchAllCause((cause) => {
+        const msg = Cause.pretty(cause).split("\n")[0]?.trim() || "Unknown error"
+        return Effect.succeed({ type: "error" as const, errorMessage: `${raw.fingerprint}: ${msg}` })
       })
-      updated++
-    }
-  }
+    )
+
+  // Update progress in sync_logs periodically
+  const updateProgress = Effect.gen(function* () {
+    const added = yield* Ref.get(addedRef)
+    const updated = yield* Ref.get(updatedRef)
+    yield* Effect.tryPromise({
+      try: () =>
+        db
+          .update(syncLogs)
+          .set({ dogsAdded: added, dogsUpdated: updated })
+          .where(eq(syncLogs.id, syncLogId)),
+      catch: (e) => new DatabaseError({ operation: "update progress", cause: e }),
+    }).pipe(Effect.catchAll(() => Effect.void))
+  })
+
+  // Process all dogs with bounded concurrency
+  yield* Effect.forEach(
+    rawDogs,
+    (raw) =>
+      Effect.gen(function* () {
+        const result = yield* processSingleDog(raw)
+
+        // Update counters and collect results
+        if (result.type === "added") {
+          yield* Ref.update(addedRef, (n) => n + 1)
+          if (result.reindexJob) {
+            yield* Ref.update(reindexJobsRef, (jobs) => [...jobs, result.reindexJob!])
+          }
+        } else if (result.type === "updated") {
+          yield* Ref.update(updatedRef, (n) => n + 1)
+        } else if (result.type === "error" && result.errorMessage) {
+          yield* Ref.update(errorsRef, (errs) =>
+            errs.length < MAX_COLLECTED_ERRORS ? [...errs, result.errorMessage!] : errs
+          )
+        }
+
+        // Periodic progress update
+        const processed = yield* Ref.updateAndGet(processedCountRef, (n) => n + 1)
+        if (processed % PROGRESS_UPDATE_INTERVAL === 0) {
+          yield* updateProgress
+        }
+      }),
+    { concurrency }
+  )
+
+  // Read final values from refs
+  const added = yield* Ref.get(addedRef)
+  const updated = yield* Ref.get(updatedRef)
+  const reindexJobs = yield* Ref.get(reindexJobsRef)
+  const collectedErrors = yield* Ref.get(errorsRef)
 
   // After processing found dogs, sweep for stale dogs
   const staleThreshold = 36 * 60 * 60 * 1000 // 36 hours in ms
@@ -373,16 +453,20 @@ export const processMessageBase = (
           dogsAdded: added,
           dogsUpdated: updated,
           dogsRemoved,
+          errors: collectedErrors,
+          errorMessage: collectedErrors.length > 0
+            ? `${collectedErrors.length} dog(s) failed processing`
+            : null,
         })
         .where(eq(syncLogs.id, syncLogId)),
     catch: (e) => new DatabaseError({ operation: "update sync log", cause: e }),
   })
 
- yield* Effect.tryPromise({
-   try: () =>
-     db
-       .update(shelters)
-       .set({ lastSync: new Date(), status: "active" })
+  yield* Effect.tryPromise({
+    try: () =>
+      db
+        .update(shelters)
+        .set({ lastSync: new Date(), status: "active" })
         .where(eq(shelters.id, job.shelterId))
         .run(),
     catch: (e) => new DatabaseError({ operation: "update shelter", cause: e }),

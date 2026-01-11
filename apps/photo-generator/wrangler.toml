@@ -8,6 +8,9 @@ queue = "dogpile-photo-gen-jobs"
 max_batch_size = 1
 max_retries = 3
 
+[limits]
+cpu_ms = 120000
+
 [[d1_databases]]
 binding = "DB"
 database_name = "dogpile-db"

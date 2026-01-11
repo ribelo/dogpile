@@ -14,6 +14,9 @@ queue = "dogpile-reindex-jobs"
 max_batch_size = 10
 max_retries = 3
 
+[limits]
+cpu_ms = 120000
+
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "dogpile-dogs"
