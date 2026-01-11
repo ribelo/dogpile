@@ -8,6 +8,8 @@
     "./domain": "./src/domain/index.ts",
     "./queues": "./src/queues/index.ts",
     "./services": "./src/services/index.ts",
+    "./services/image-generator": "./src/services/image-generator.ts",
+    "./services/openrouter/client": "./src/services/openrouter/client.ts",
     "./schemas/*": "./src/schemas/*.ts",
     "./config/*": "./src/config/*.ts"
   },
