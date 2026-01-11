@@ -2,13 +2,14 @@
 import { Effect, Console, Exit, Cause, Layer, Queue, Fiber, Chunk, Schedule, Option } from "effect"
 import { Schema } from "effect"
 import { FetchHttpClient } from "@effect/platform"
-import { getAdapter, listAdapters } from "./registry.js"
+import { getAdapter, getAllAdapters, listAdapters } from "./registry.js"
 import type { RawDogData } from "./adapter.js"
 import { $ } from "bun"
 import { writeFileSync, unlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import sharp from "sharp"
+import { parseHTML } from "linkedom"
 
 
 class R2Error extends Schema.TaggedError<R2Error>()("R2Error", {
@@ -108,6 +109,7 @@ Usage:
 
 Commands:
   list                    List all available scrapers
+  seed                    Upsert all scrapers into local D1 shelters table
   run <scraper-id>        Run scraper (dry-run by default)
   process <scraper-id>    Full pipeline: scrape + AI + save
   photos <action>           Manage AI generated photos
@@ -128,6 +130,7 @@ Options:
 
 Examples:
   bun run cli list
+  bun run cli seed
   bun run cli run tozjawor
   bun run cli process tozjawor --limit 2
   bun run cli reindex --limit 10
@@ -143,8 +146,29 @@ const listCommand = Effect.gen(function* () {
   yield* Console.log("")
 })
 
+const seedCommand = Effect.gen(function* () {
+  const esc = (s: string | null | undefined) => (s ?? "").replace(/'/g, "''")
+  const adapters = getAllAdapters()
+
+  yield* Console.log(`\n🌱 Seeding shelters (${adapters.length})...`)
+
+  const statements = adapters.map((adapter) =>
+    `INSERT INTO shelters (id, slug, name, url, city, status, active, last_sync) VALUES ('${esc(adapter.id)}', '${esc(adapter.id)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', 'active', 1, NULL) ON CONFLICT(id) DO UPDATE SET name = excluded.name, url = excluded.url, city = excluded.city, status = 'active', active = 1`
+  )
+
+  for (let i = 0; i < statements.length; i += 50) {
+    const chunk = statements.slice(i, i + 50)
+    yield* execSql(`BEGIN TRANSACTION; ${chunk.join("; ")}; COMMIT;`)
+  }
+
+  yield* Console.log("✅ Shelters seeded.")
+})
+
 const formatDog = (dog: RawDogData, index: number): string => {
-  const desc = (dog.rawDescription ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 80)
+  const raw = dog.rawDescription ?? ""
+  const { document } = parseHTML(`<div>${raw}</div>`)
+  const text = document.body.textContent ?? ""
+  const desc = text.replace(/\s+/g, " ").trim().slice(0, 80)
   return `[${index + 1}] ${dog.name} (${dog.sex ?? "?"}) - ${desc}...`
 }
 
@@ -724,7 +748,10 @@ const photosGenerateCommand = Effect.gen(function* () {
     if (photos.length === 0) { yield* Console.log(`   ⚠️ No reference photos`); return }
 
     let description = dog.generated_bio || ""
-    if (description.length < 20) description = (dog.raw_description || "").replace(/<[^>]*>/g, " ").trim()
+    if (description.length < 20) {
+      const { document } = parseHTML(`<div>${dog.raw_description || ""}</div>`)
+      description = (document.body.textContent ?? "").replace(/\s+/g, " ").trim()
+    }
     if (description.length < 20) description = `${dog.name} is a dog.`
 
     const imgResult = yield* imageGen.generatePhotos({
@@ -866,6 +893,10 @@ const program = Effect.gen(function* () {
   }
   if (command === "list") {
     yield* listCommand
+    return
+  }
+  if (command === "seed") {
+    yield* seedCommand
     return
   }
   if (command === "run") {

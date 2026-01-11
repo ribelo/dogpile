@@ -17,6 +17,7 @@ const runScrapersCli = (args: string[]) =>
   })
 
 const listCommand = Command.make("list", {}, () => runScrapersCli(["list"]))
+const seedCommand = Command.make("seed", {}, () => runScrapersCli(["seed"]))
 
 const shelterIdArg = Args.text({ name: "shelter-id" })
 const limitOpt = Options.integer("limit").pipe(Options.optional)
@@ -45,5 +46,5 @@ const processCommand = Command.make("process", {
 )
 
 export const scrapeCommand = Command.make("scrape", {}).pipe(
-  Command.withSubcommands([listCommand, runCommand, processCommand])
+  Command.withSubcommands([listCommand, seedCommand, runCommand, processCommand])
 )
