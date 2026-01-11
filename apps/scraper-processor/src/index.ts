@@ -32,6 +32,7 @@ interface ScrapeJob {
   shelterId: string
   shelterSlug: string
   baseUrl: string
+  syncLogId?: string
 }
 
 interface ReindexJob {
@@ -74,17 +75,24 @@ export const processMessageBase = (
 
   const startedAt = new Date()
 
+  // Best-effort: the API may have already created the sync log entry when enqueueing.
+  // We avoid reading `sync_logs` here to keep worker execution + tests simple.
   yield* Effect.tryPromise({
     try: () =>
-      db.insert(syncLogs).values({
-        id: syncLogId,
-        shelterId: job.shelterId,
-        startedAt,
-        dogsAdded: 0,
-        dogsUpdated: 0,
-        dogsRemoved: 0,
-        errors: [],
-      }),
+      env.DB.prepare(
+        `INSERT INTO sync_logs (
+          id,
+          shelter_id,
+          started_at,
+          finished_at,
+          dogs_added,
+          dogs_updated,
+          dogs_removed,
+          errors,
+          error_message
+        ) VALUES (?, ?, ?, NULL, 0, 0, 0, ?, NULL)
+        ON CONFLICT(id) DO NOTHING`
+      ).bind(syncLogId, job.shelterId, startedAt.getTime(), JSON.stringify([])).run(),
     catch: (e) => new DatabaseError({ operation: "create sync log", cause: e }),
   })
 
@@ -412,7 +420,7 @@ export const processMessageBase = (
 )
 
 const processMessage = (message: Message<ScrapeJob>, env: Env) => {
-  const syncLogId = crypto.randomUUID()
+  const syncLogId = message.body.syncLogId ?? crypto.randomUUID()
   const costDb = drizzle(env.DB)
   const ApiCostTrackerLive = Layer.succeed(
     ApiCostTracker,

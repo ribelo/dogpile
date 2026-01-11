@@ -18,7 +18,7 @@ interface Env {
   IMAGE_QUEUE?: Queue<ImagesProcessOriginalJob | { dogId: string; urls: string[] }>
   PHOTO_GEN_QUEUE?: Queue<PhotosGenerateJob>
   REINDEX_QUEUE?: Queue<any>
-  SCRAPE_QUEUE?: Queue<{ shelterId: string; shelterSlug: string; baseUrl: string }>
+  SCRAPE_QUEUE?: Queue<{ shelterId: string; shelterSlug: string; baseUrl: string; syncLogId?: string }>
   ADMIN_KEY?: string
 }
 
@@ -953,11 +953,29 @@ const routes: Route[] = [
 
       if (!env.SCRAPE_QUEUE) return yield* json({ error: "SCRAPE_QUEUE not configured" }, 500)
 
+      const syncLogId = crypto.randomUUID()
+      const startedAt = new Date()
+
+      yield* Effect.tryPromise({
+        try: () =>
+          db.insert(syncLogs).values({
+            id: syncLogId,
+            shelterId: shelter.id,
+            startedAt,
+            dogsAdded: 0,
+            dogsUpdated: 0,
+            dogsRemoved: 0,
+            errors: [],
+          }),
+        catch: (e) => new DatabaseError({ operation: "create sync log", cause: e }),
+      })
+
       yield* Effect.tryPromise({
         try: () => env.SCRAPE_QUEUE!.send({
           shelterId: shelter.id,
           shelterSlug: shelter.slug,
-          baseUrl: shelter.url
+          baseUrl: shelter.url,
+          syncLogId
         }),
         catch: (e) => new QueueError({ operation: "enqueue scrape", cause: e })
       })

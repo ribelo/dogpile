@@ -19,6 +19,7 @@ interface ScrapeJob {
   shelterId: string
   shelterSlug: string
   baseUrl: string
+  syncLogId?: string
 }
 
 export default {

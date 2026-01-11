@@ -19,6 +19,8 @@
     "cli": "bun run --filter @dogpile/cli start",
     "db:pull": "bun run cli db pull",
     "db:push": "bun run cli db push",
+    "dev:workers": "wrangler d1 migrations apply dogpile-db --local --config apps/api/wrangler.toml --persist-to apps/api/.wrangler/state && wrangler dev -c apps/api/wrangler.toml -c apps/scraper-processor/wrangler.toml -c apps/embedder/wrangler.toml -c apps/photo-generator/wrangler.toml --persist-to apps/api/.wrangler/state --port 8787 --inspector-port 9230",
+    "dev:e2e": "bun run dev:workers & bun run dev:web",
     "prepare": "effect-language-service patch"
   },
   "devDependencies": {
