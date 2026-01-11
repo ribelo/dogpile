@@ -10,6 +10,20 @@ import { fundacjaTaraAdapter } from "./adapters/fundacja-tara.js"
 import { centaurusFolwarkAdapter } from "./adapters/centaurus-folwark.js"
 import { zoodoptujLatkaNaLapceAdapter } from "./adapters/zoodoptuj-latka-na-lapce.js"
 import { fundacjaKubusiaPuchatkaAdapter } from "./adapters/fundacja-kubusia-puchatka.js"
+import { schroniskoPoznanAdapter } from "./adapters/schronisko-poznan.js"
+import { schroniskoSkalowoAdapter } from "./adapters/schronisko-skalowo.js"
+import { schroniskoKrotoszynAdapter } from "./adapters/schronisko-krotoszyn.js"
+import { schroniskoKoninAdapter } from "./adapters/schronisko-konin.js"
+import { schroniskoPilaMiluszkowAdapter } from "./adapters/schronisko-pila-miluszkow.js"
+import { schroniskoOstrowAdapter } from "./adapters/schronisko-ostrow.js"
+import { schroniskoWrzesniaPsijacielAdapter } from "./adapters/schronisko-wrzesnia-psijaciel.js"
+import { schroniskoLesznoHenrykowoAdapter } from "./adapters/schronisko-leszno-henrykowo.js"
+import { przytuliskoWolsztynAdapter } from "./adapters/przytulisko-wolsztyn.js"
+import { przytuliskoUWandyAdapter } from "./adapters/przytulisko-u-wandy.js"
+import { otozSompolnoAdapter } from "./adapters/otoz-sompolno.js"
+import { fundacjaSterczaceUszyAdapter } from "./adapters/fundacja-sterczace-uszy.js"
+import { schroniskoGnieznoAdapter } from "./adapters/schronisko-gniezno.js"
+import { schroniskoJedrzejewoAdapter } from "./adapters/schronisko-jedrzejewo.js"
 
 const adapters = new Map<string, ShelterAdapter>()
 
@@ -28,6 +42,20 @@ registerAdapter(fundacjaTaraAdapter)
 registerAdapter(centaurusFolwarkAdapter)
 registerAdapter(zoodoptujLatkaNaLapceAdapter)
 registerAdapter(fundacjaKubusiaPuchatkaAdapter)
+registerAdapter(schroniskoPoznanAdapter)
+registerAdapter(schroniskoSkalowoAdapter)
+registerAdapter(schroniskoGnieznoAdapter)
+registerAdapter(schroniskoJedrzejewoAdapter)
+registerAdapter(schroniskoKrotoszynAdapter)
+registerAdapter(schroniskoKoninAdapter)
+registerAdapter(schroniskoPilaMiluszkowAdapter)
+registerAdapter(schroniskoOstrowAdapter)
+registerAdapter(schroniskoWrzesniaPsijacielAdapter)
+registerAdapter(schroniskoLesznoHenrykowoAdapter)
+registerAdapter(przytuliskoWolsztynAdapter)
+registerAdapter(przytuliskoUWandyAdapter)
+registerAdapter(otozSompolnoAdapter)
+registerAdapter(fundacjaSterczaceUszyAdapter)
 
 export const getAdapter = (id: string): ShelterAdapter | undefined => {
   return adapters.get(id)
