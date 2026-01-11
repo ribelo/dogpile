@@ -116,7 +116,7 @@ export default function AdminDashboard(props: Props) {
           <>
             {/* Stats Cards */}
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <a href="/admin/queue" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+              <a href="/admin/dogs?status=pending" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
                 <h2 class="text-sm font-medium text-gray-500 uppercase">Pending</h2>
                 <p class="text-3xl font-bold text-yellow-600">{data().dogs.pending}</p>
               </a>

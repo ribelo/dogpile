@@ -1,6 +1,6 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro'
-import AdminQueue from '../../components/admin/AdminQueue.tsx'
+import AdminJobsQueue from '../../components/admin/AdminJobsQueue.tsx'
 
 const apiUrl = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
 // SECURITY: This page should be protected by Cloudflare Access
@@ -8,5 +8,5 @@ const adminKey = import.meta.env.ADMIN_KEY ?? import.meta.env.PUBLIC_ADMIN_KEY ?
 ---
 
 <AdminLayout title="Queue">
-  <AdminQueue client:load apiUrl={apiUrl} adminKey={adminKey} />
+  <AdminJobsQueue client:load apiUrl={apiUrl} adminKey={adminKey} />
 </AdminLayout>

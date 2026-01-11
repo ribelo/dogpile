@@ -114,6 +114,70 @@ const routes: Route[] = [
   },
   {
     method: "GET",
+    pattern: new URLPattern({ pathname: "/admin/jobs" }),
+    handler: Effect.fn("api.adminJobs")(function* (req, env) {
+      if (!isAuthorized(req, env)) {
+        return yield* json({ error: "Unauthorized" }, 401)
+      }
+
+      const url = new URL(req.url)
+      const limitParam = url.searchParams.get("limit")
+      const limit = Math.min(Math.max(parseInt(limitParam ?? "50") || 50, 1), 200)
+
+      const db = drizzle(env.DB)
+
+      const logs = yield* Effect.tryPromise({
+        try: () =>
+          db.select({
+            id: syncLogs.id,
+            shelterId: syncLogs.shelterId,
+            shelterName: shelters.name,
+            startedAt: syncLogs.startedAt,
+            finishedAt: syncLogs.finishedAt,
+            dogsAdded: syncLogs.dogsAdded,
+            dogsUpdated: syncLogs.dogsUpdated,
+            dogsRemoved: syncLogs.dogsRemoved,
+            errors: syncLogs.errors,
+            errorMessage: syncLogs.errorMessage,
+          })
+          .from(syncLogs)
+          .leftJoin(shelters, eq(syncLogs.shelterId, shelters.id))
+          .orderBy(desc(syncLogs.startedAt))
+          .limit(limit)
+          .all(),
+        catch: (e) => new DatabaseError({ operation: "get admin jobs", cause: e })
+      })
+
+      const jobs = logs.map(log => {
+        let status: "running" | "error" | "success"
+        if (!log.finishedAt) {
+          status = "running"
+        } else if (log.errorMessage || (log.errors && log.errors.length > 0)) {
+          status = "error"
+        } else {
+          status = "success"
+        }
+
+        return {
+          id: log.id,
+          shelterId: log.shelterId,
+          shelterName: log.shelterName ?? "Unknown",
+          startedAt: log.startedAt ? new Date(log.startedAt).toISOString() : null,
+          finishedAt: log.finishedAt ? new Date(log.finishedAt).toISOString() : null,
+          dogsAdded: log.dogsAdded,
+          dogsUpdated: log.dogsUpdated,
+          dogsRemoved: log.dogsRemoved,
+          errors: log.errors ?? [],
+          errorMessage: log.errorMessage,
+          status,
+        }
+      })
+
+      return yield* json({ jobs })
+    }),
+  },
+  {
+    method: "GET",
     pattern: new URLPattern({ pathname: "/dogs" }),
     handler: Effect.fn("api.listDogs")(function* (req, env) {
       const url = new URL(req.url)
