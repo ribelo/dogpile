@@ -80,7 +80,13 @@ async function updateStatus(apiUrl: string, adminKey: string, dogId: string, sta
   if (!response.ok) throw new Error("Failed to update status")
 }
 
-async function regenerate(apiUrl: string, adminKey: string, dogId: string, target: string): Promise<{ message?: string }> {
+type RegenerateResponse = {
+  message?: string
+  traceId?: string
+  expected?: string[]
+}
+
+async function regenerate(apiUrl: string, adminKey: string, dogId: string, target: string): Promise<RegenerateResponse> {
   const response = await fetch(`${apiUrl}/admin/dogs/${dogId}/regenerate`, {
     method: "POST",
     headers: { 
@@ -108,6 +114,24 @@ export default function AdminDogEdit(props: Props) {
   const [saving, setSaving] = createSignal(false)
   const [message, setMessage] = createSignal<string | null>(null)
   const [viewingPhoto, setViewingPhoto] = createSignal<ViewingPhoto | null>(null)
+  const [regenerating, setRegenerating] = createSignal(false)
+  const [expectedKeys, setExpectedKeys] = createSignal<string[]>([])
+
+  let pollIntervalId: number | undefined
+  let pollTimeoutId: number | undefined
+
+  const stopPolling = () => {
+    if (pollIntervalId !== undefined) {
+      clearInterval(pollIntervalId)
+      pollIntervalId = undefined
+    }
+    if (pollTimeoutId !== undefined) {
+      clearTimeout(pollTimeoutId)
+      pollTimeoutId = undefined
+    }
+  }
+
+  onCleanup(() => stopPolling())
 
   // Form state
   const [name, setName] = createSignal("")
@@ -200,10 +224,63 @@ export default function AdminDogEdit(props: Props) {
 
   async function handleRegenerate(target: string) {
     try {
+      stopPolling()
+
       const response = await regenerate(props.apiUrl, props.adminKey, props.dogId, target)
-      setMessage(response.message || `${target} regeneration queued`)
-      setTimeout(() => setMessage(null), 3000)
+
+      const shouldPoll = target === "photos" || target === "all"
+      if (!shouldPoll) {
+        setMessage(response.message || `${target} regeneration queued`)
+        setTimeout(() => setMessage(null), 3000)
+        return
+      }
+
+      const expected = response.expected ?? []
+      if (expected.length === 0) {
+        setMessage("Regeneration queued")
+        setTimeout(() => setMessage(null), 3000)
+        return
+      }
+
+      setRegenerating(true)
+      setExpectedKeys(expected)
+      setMessage("Processing...")
+
+      const isComplete = (d: DogDetail): boolean => {
+        const present = new Set([
+          ...d.photos.professional,
+          ...d.photos.nose,
+        ])
+        return expectedKeys().every((key) => present.has(key))
+      }
+
+      const pollOnce = async () => {
+        await refetch()
+        const d = dog()
+        if (!d) return
+
+        if (isComplete(d)) {
+          stopPolling()
+          setRegenerating(false)
+          setMessage("Photos generated")
+          setTimeout(() => setMessage(null), 3000)
+        }
+      }
+
+      pollIntervalId = window.setInterval(() => {
+        pollOnce().catch(() => {})
+      }, 3000)
+
+      pollTimeoutId = window.setTimeout(() => {
+        stopPolling()
+        setRegenerating(false)
+        setMessage("Timed out, check logs")
+      }, 2 * 60 * 1000)
+
+      await pollOnce()
     } catch (e) {
+      stopPolling()
+      setRegenerating(false)
       setMessage("Regeneration failed")
     }
   }
@@ -272,9 +349,10 @@ export default function AdminDogEdit(props: Props) {
                   <h2 class="text-lg font-semibold">Photos</h2>
                   <button
                     onClick={() => handleRegenerate("photos")}
-                    class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                    disabled={regenerating()}
+                    class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
                   >
-                    Regenerate Photos
+                    {regenerating() ? "Processing..." : "Regenerate Photos"}
                   </button>
                 </div>
                 <div class="grid grid-cols-3 gap-4">
