@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 import { drizzle } from "drizzle-orm/d1"
 import { dogs, shelters, syncLogs, apiCosts } from "@dogpile/db"
+import { makeEnvelope, type ImagesProcessOriginalJob, type PhotosGenerateJob } from "@dogpile/core/queues"
 import { eq, desc, asc, and, like, sql, SQL, inArray } from "drizzle-orm"
 import { DatabaseError, R2Error, QueueError } from "./errors"
 
@@ -14,7 +15,8 @@ interface Env {
   OPENROUTER_MODEL: string
   ENVIRONMENT: string
   R2_PUBLIC_DOMAIN?: string
-  IMAGE_QUEUE?: Queue<{ dogId: string; urls: string[] }>
+  IMAGE_QUEUE?: Queue<ImagesProcessOriginalJob | { dogId: string; urls: string[] }>
+  PHOTO_GEN_QUEUE?: Queue<PhotosGenerateJob>
   REINDEX_QUEUE?: Queue<any>
   SCRAPE_QUEUE?: Queue<{ shelterId: string; shelterSlug: string; baseUrl: string }>
   ADMIN_KEY?: string
@@ -760,27 +762,76 @@ const routes: Route[] = [
       if (!dog) return yield* json({ error: "Dog not found" }, 404)
 
       const regeneratePhotos = body.target === "photos" || body.target === "all"
-      if (regeneratePhotos && env.IMAGE_QUEUE) {
+      if (regeneratePhotos) {
+        const photoGenQueue = env.PHOTO_GEN_QUEUE
+        if (!photoGenQueue) {
+          return yield* json({ error: "PHOTO_GEN_QUEUE not configured" }, 500)
+        }
+
+        const rootTraceId = crypto.randomUUID()
+        const imageQueue = env.IMAGE_QUEUE
         const externalUrls = (dog.photos || []).filter((p: string) => p.startsWith("http"))
-        if (externalUrls.length > 0) {
-          const job: { dogId: string; urls: string[] } = {
-            dogId: dog.id,
-            urls: externalUrls
-          }
+
+        yield* Effect.tryPromise({
+          try: () =>
+            db
+              .update(dogs)
+              .set({ photosGenerated: [], updatedAt: new Date() })
+              .where(eq(dogs.id, dog.id)),
+          catch: (e) => new DatabaseError({ operation: "clear photosGenerated", cause: e }),
+        })
+
+        if (imageQueue && externalUrls.length > 0) {
+          const imageJob = makeEnvelope({
+            type: "images.processOriginal",
+            payload: { dogId: dog.id, urls: externalUrls },
+            source: "admin",
+            parentTraceId: rootTraceId,
+          })
+
           yield* Effect.tryPromise({
-            try: () => env.IMAGE_QUEUE!.send(job),
-            catch: (e) => new QueueError({ operation: "enqueue image job", cause: e })
+            try: () => imageQueue.send(imageJob),
+            catch: (e) => new QueueError({ operation: "enqueue image job", cause: e }),
           })
         }
+
+        const professionalJob = makeEnvelope({
+          type: "photos.generate",
+          payload: { dogId: dog.id, variant: "professional" as const },
+          source: "admin",
+          parentTraceId: rootTraceId,
+        })
+
+        const noseJob = makeEnvelope({
+          type: "photos.generate",
+          payload: { dogId: dog.id, variant: "nose" as const },
+          source: "admin",
+          parentTraceId: rootTraceId,
+        })
+
+        yield* Effect.tryPromise({
+          try: () => photoGenQueue.send(professionalJob),
+          catch: (e) => new QueueError({ operation: "enqueue photo job: professional", cause: e }),
+        })
+
+        yield* Effect.tryPromise({
+          try: () => photoGenQueue.send(noseJob),
+          catch: (e) => new QueueError({ operation: "enqueue photo job: nose", cause: e }),
+        })
+
+        return yield* json({
+          success: true,
+          traceId: rootTraceId,
+          expected: [
+            `generated/${dog.fingerprint}-professional`,
+            `generated/${dog.fingerprint}-nose`,
+          ],
+        })
       }
 
-      return yield* json({ 
-        success: true, 
-        message: body.target === "bio"
-          ? "Bio regeneration is not implemented yet"
-          : body.target === "all"
-            ? "Photo regeneration queued (bio regeneration not implemented yet)"
-            : "Photo regeneration queued"
+      return yield* json({
+        success: true,
+        message: "Bio regeneration is not implemented yet",
       })
     }),
   },

@@ -9,6 +9,32 @@ export interface ImageJob {
   urls: string[]
 }
 
+const toImageJob = (body: unknown): ImageJob | null => {
+  if (typeof body !== "object" || body === null) return null
+
+  const type = (body as { type?: unknown }).type
+  if (type === "images.processOriginal") {
+    const payload = (body as { payload?: unknown }).payload
+    if (typeof payload !== "object" || payload === null) return null
+
+    const dogId = (payload as { dogId?: unknown }).dogId
+    const urls = (payload as { urls?: unknown }).urls
+
+    if (typeof dogId !== "string") return null
+    if (!Array.isArray(urls) || !urls.every((u) => typeof u === "string")) return null
+
+    return { dogId, urls }
+  }
+
+  const dogId = (body as { dogId?: unknown }).dogId
+  const urls = (body as { urls?: unknown }).urls
+
+  if (typeof dogId !== "string") return null
+  if (!Array.isArray(urls) || !urls.every((u) => typeof u === "string")) return null
+
+  return { dogId, urls }
+}
+
 export interface ImagesBinding {
   input(data: ArrayBuffer | ReadableStream): ImageTransformer
 }
@@ -43,7 +69,7 @@ async function sha256Short(input: string): Promise<string> {
 }
 
 export async function handleImageJobs(
-  batch: MessageBatch<ImageJob>,
+  batch: MessageBatch<unknown>,
   env: ImageEnv,
   ctx: ExecutionContext
 ): Promise<void> {
@@ -53,10 +79,17 @@ export async function handleImageJobs(
 }
 
 const handleImageJobBase = Effect.fn("scraper.handleImageJob")(function* (
-  message: Message<ImageJob>,
+  message: Message<unknown>,
   env: ImageEnv
 ) {
-  const job = message.body
+  const job = toImageJob(message.body)
+  if (!job) {
+    yield* Effect.logWarning(
+      `Unexpected image job payload: ${String((message.body as { type?: unknown } | null)?.type)}`
+    )
+    message.ack()
+    return
+  }
   const db = drizzle(env.DB)
   const processedByUrl = new Map<string, string>()
 
@@ -106,7 +139,7 @@ const handleImageJobBase = Effect.fn("scraper.handleImageJob")(function* (
   message.ack()
 })
 
-const handleImageJob = (message: Message<ImageJob>, env: ImageEnv) =>
+const handleImageJob = (message: Message<unknown>, env: ImageEnv) =>
   handleImageJobBase(message, env).pipe(
     Effect.catchAll((error) =>
       Effect.gen(function* () {
