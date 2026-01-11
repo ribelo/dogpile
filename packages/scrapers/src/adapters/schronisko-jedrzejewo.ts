@@ -97,6 +97,7 @@ export const schroniskoJedrzejewoAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Jędrzejewo",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {
@@ -149,4 +150,3 @@ export const schroniskoJedrzejewoAdapter = createAdapter({
       photos: raw.photos ?? [],
     }),
 })
-

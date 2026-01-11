@@ -47,7 +47,7 @@ const pullCommand = Command.make("pull", {}, () =>
 
     // Get keys from remote D1 first
     yield* Console.log("Fetching photo keys from remote D1...")
-    const cmd = `nix develop -c wrangler d1 execute dogpile-db --remote --json --config ${CONFIG_PATH} --command "SELECT photos_generated FROM dogs WHERE photos_generated != '[]'"`
+    const cmd = `wrangler d1 execute dogpile-db --remote --json --config ${CONFIG_PATH} --command "SELECT photos_generated FROM dogs WHERE photos_generated != '[]'"`
     const output = execSync(cmd, { encoding: "utf8", cwd: REPO_ROOT })
     const jsonMatch = output.match(/\[[\s\S]*\]/)
     if (!jsonMatch) {
@@ -79,12 +79,12 @@ const pullCommand = Command.make("pull", {}, () =>
       try {
         // Download from remote
         execSync(
-          `nix develop -c wrangler r2 object get "dogpile-generated/${key}" --remote --file "${localPath}"`,
+          `wrangler r2 object get "dogpile-generated/${key}" --remote --file "${localPath}" --config ${CONFIG_PATH}`,
           { cwd: REPO_ROOT, stdio: "pipe" }
         )
         // Upload to local
         execSync(
-          `nix develop -c wrangler r2 object put "dogpile-generated/${key}" --file "${localPath}" --config ${CONFIG_PATH}`,
+          `wrangler r2 object put "dogpile-generated/${key}" --file "${localPath}" --config ${CONFIG_PATH}`,
           { cwd: REPO_ROOT, stdio: "pipe" }
         )
         synced++
@@ -121,7 +121,7 @@ const pushCommand = Command.make("push", {}, () =>
       const localPath = path.join(cacheDir, safeFilename)
       try {
         execSync(
-          `nix develop -c wrangler r2 object get "dogpile-generated/${key}" --file "${localPath}" --config ${CONFIG_PATH}`,
+          `wrangler r2 object get "dogpile-generated/${key}" --file "${localPath}" --config ${CONFIG_PATH}`,
           { cwd: REPO_ROOT, stdio: "pipe" }
         )
         exported++
@@ -140,7 +140,7 @@ const pushCommand = Command.make("push", {}, () =>
       if (!existsSync(localPath)) continue
       try {
         execSync(
-          `nix develop -c wrangler r2 object put "dogpile-generated/${key}" --remote --file "${localPath}"`,
+          `wrangler r2 object put "dogpile-generated/${key}" --remote --file "${localPath}" --config ${CONFIG_PATH}`,
           { cwd: REPO_ROOT, stdio: "pipe" }
         )
         pushed++

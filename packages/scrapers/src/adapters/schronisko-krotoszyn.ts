@@ -83,6 +83,7 @@ export const schroniskoKrotoszynAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Krotoszyn",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {

@@ -171,6 +171,7 @@ export const otozSompolnoAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Sompolno",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {

@@ -133,6 +133,7 @@ export const schroniskoWrzesniaPsijacielAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Września",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {

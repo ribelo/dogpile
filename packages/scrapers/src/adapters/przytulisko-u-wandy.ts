@@ -173,6 +173,7 @@ export const przytuliskoUWandyAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Przyborówko",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {

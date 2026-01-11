@@ -153,7 +153,7 @@ const seedCommand = Effect.gen(function* () {
   yield* Console.log(`\n🌱 Seeding shelters (${adapters.length})...`)
 
   const statements = adapters.map((adapter) =>
-    `INSERT INTO shelters (id, slug, name, url, city, status, active, last_sync) VALUES ('${esc(adapter.id)}', '${esc(adapter.id)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', 'active', 1, NULL) ON CONFLICT(id) DO UPDATE SET name = excluded.name, url = excluded.url, city = excluded.city, status = 'active', active = 1`
+    `INSERT INTO shelters (id, slug, name, url, city, region, status, active, last_sync) VALUES ('${esc(adapter.id)}', '${esc(adapter.id)}', '${esc(adapter.name)}', '${esc(adapter.url)}', '${esc(adapter.city)}', ${adapter.region ? `'${esc(adapter.region)}'` : 'NULL'}, 'active', 1, NULL) ON CONFLICT(id) DO UPDATE SET name = excluded.name, url = excluded.url, city = excluded.city, region = excluded.region, status = 'active', active = 1`
   )
 
   for (let i = 0; i < statements.length; i += 50) {

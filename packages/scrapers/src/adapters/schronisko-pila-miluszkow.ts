@@ -121,6 +121,7 @@ export const schroniskoPilaMiluszkowAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Piła",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {

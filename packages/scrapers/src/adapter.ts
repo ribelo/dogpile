@@ -30,6 +30,7 @@ export interface ShelterAdapter {
   readonly url: string
   readonly sourceUrl: string
   readonly city: string
+  readonly region?: string
   readonly fetch: (config: ScraperConfig) => Effect.Effect<string, ScrapeError, HttpClient.HttpClient>
   readonly parse: (html: string, config: ScraperConfig) => Effect.Effect<readonly RawDogData[], ParseError, HttpClient.HttpClient>
   readonly transform: (raw: RawDogData, config: ScraperConfig) => Effect.Effect<CreateDogInput, ParseError>

@@ -89,6 +89,7 @@ export const schroniskoSkalowoAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Skałowo",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {

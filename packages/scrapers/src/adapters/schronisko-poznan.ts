@@ -79,6 +79,7 @@ export const schroniskoPoznanAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Poznań",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {

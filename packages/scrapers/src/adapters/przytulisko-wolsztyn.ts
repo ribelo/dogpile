@@ -121,6 +121,7 @@ export const przytuliskoWolsztynAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Wolsztyn",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {

@@ -162,6 +162,7 @@ export const fundacjaSterczaceUszyAdapter = createAdapter({
   url: BASE_URL,
   sourceUrl: SOURCE_URL,
   city: "Luboń",
+  region: "Wielkopolskie",
 
   fetch: (config) =>
     Effect.gen(function* () {
