@@ -43,6 +43,22 @@
         "wrangler": "^4.23.0",
       },
     },
+    "apps/photo-generator": {
+      "name": "@dogpile/photo-generator",
+      "version": "0.0.1",
+      "dependencies": {
+        "@dogpile/core": "workspace:*",
+        "@dogpile/db": "workspace:*",
+        "@effect/platform": "^0.94.0",
+        "drizzle-orm": "^0.44.4",
+        "effect": "^3.19.13",
+      },
+      "devDependencies": {
+        "@cloudflare/workers-types": "^4.20250620.0",
+        "typescript": "^5.8.3",
+        "wrangler": "^4.23.0",
+      },
+    },
     "apps/scraper-processor": {
       "name": "@dogpile/scraper-processor",
       "version": "0.0.1",
@@ -254,6 +270,8 @@
     "@dogpile/db": ["@dogpile/db@workspace:packages/db"],
 
     "@dogpile/embedder": ["@dogpile/embedder@workspace:apps/embedder"],
+
+    "@dogpile/photo-generator": ["@dogpile/photo-generator@workspace:apps/photo-generator"],
 
     "@dogpile/scraper-processor": ["@dogpile/scraper-processor@workspace:apps/scraper-processor"],
 

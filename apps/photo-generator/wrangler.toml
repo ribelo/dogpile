@@ -1,0 +1,28 @@
+name = "dogpile-photo-generator"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[queues.consumers]]
+queue = "dogpile-photo-gen-jobs"
+max_batch_size = 1
+max_retries = 3
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dogpile-db"
+database_id = "ea4a4ec7-ad28-4219-a86f-5054bc79b21c"
+migrations_dir = "../../packages/db/migrations"
+
+[[r2_buckets]]
+binding = "PHOTOS_GENERATED"
+bucket_name = "dogpile-generated"
+preview_bucket_name = "dogpile-generated"
+
+[images]
+binding = "IMAGES"
+
+[vars]
+MODEL_IMAGE_GEN = "bytedance-seed/seedream-4.5"
+
+# OPENROUTER_API_KEY - set via wrangler secret put

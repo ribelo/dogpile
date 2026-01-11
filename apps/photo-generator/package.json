@@ -1,0 +1,26 @@
+{
+  "name": "@dogpile/photo-generator",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8791 --inspector-port 9234",
+    "dev:local": "wrangler dev --port 8791",
+    "build": "bun build src/index.ts --outdir dist --target browser --minify",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dogpile/core": "workspace:*",
+    "@dogpile/db": "workspace:*",
+    "@effect/platform": "^0.94.0",
+    "drizzle-orm": "^0.44.4",
+    "effect": "^3.19.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250620.0",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.23.0"
+  }
+}
+
