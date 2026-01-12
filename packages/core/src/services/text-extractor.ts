@@ -7,7 +7,7 @@ import { toJsonSchema } from "../schemas/json-schema.js"
 import { BREEDS } from "../domain/breed.js"
 import { ExtractionError } from "./ai-extraction.js"
 import { logOpenRouterUsage } from "./api-cost-tracker.js"
-import promptTemplate from "../../prompts/text-extraction.md" with { type: "text" }
+import promptTemplate from "../../prompts/text-extraction.md"
 import type { ChatMessage } from "./openrouter/types.js"
 
 export class TextExtractor extends Context.Tag("@dogpile/TextExtractor")<

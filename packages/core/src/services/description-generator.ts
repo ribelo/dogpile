@@ -4,7 +4,7 @@ import { aiConfig } from "../config/ai.js"
 import { DogBioSchema, type DogBio } from "../schemas/dog-bio.js"
 import { toJsonSchema } from "../schemas/json-schema.js"
 import { logOpenRouterUsage } from "./api-cost-tracker.js"
-import promptTemplate from "../../prompts/description-gen.md" with { type: "text" }
+import promptTemplate from "../../prompts/description-gen.md"
 import type { ChatMessage } from "./openrouter/types.js"
 
 export class GenerationError extends Schema.TaggedError<GenerationError>()(

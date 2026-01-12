@@ -6,7 +6,7 @@ import { toJsonSchema } from "../schemas/json-schema.js"
 import { BREEDS } from "../domain/breed.js"
 import { ExtractionError } from "./ai-extraction.js"
 import { logOpenRouterUsage } from "./api-cost-tracker.js"
-import promptTemplate from "../../prompts/photo-analysis.md" with { type: "text" }
+import promptTemplate from "../../prompts/photo-analysis.md"
 import type { ChatMessage } from "./openrouter/types.js"
 
 export class PhotoAnalyzer extends Context.Tag("@dogpile/PhotoAnalyzer")<

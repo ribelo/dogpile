@@ -70,6 +70,12 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<void> {
+    type MaybeNodeProcess = { process?: { env?: Record<string, string | undefined> } }
+    const processEnv = (globalThis as unknown as MaybeNodeProcess).process?.env
+    if (processEnv && env.OPENROUTER_API_KEY && !processEnv.OPENROUTER_API_KEY) {
+      processEnv.OPENROUTER_API_KEY = env.OPENROUTER_API_KEY
+    }
+
     if (batch.queue === "dogpile-image-jobs") {
       return handleImageJobs(batch as MessageBatch<ImageJob>, env, ctx)
     }
@@ -546,6 +552,29 @@ const processMessage = (message: Message<ScrapeJob>, env: Env) => {
         OpenRouterClient.Live
       )
     ),
-    Effect.withSpan("scraper.processMessage")
+    Effect.withSpan("scraper.processMessage"),
+    Effect.catchAllCause((cause) =>
+      Effect.gen(function* () {
+        const messageText = Cause.pretty(cause).split("\n")[0]?.trim() || "Unknown error"
+
+        yield* Effect.logError(`Scrape failed (fatal): ${messageText}`)
+
+        const db = drizzle(env.DB)
+        yield* Effect.tryPromise({
+          try: () =>
+            db
+              .update(syncLogs)
+              .set({
+                finishedAt: new Date(),
+                errors: [messageText],
+                errorMessage: messageText,
+              })
+              .where(eq(syncLogs.id, syncLogId)),
+          catch: (e) => new DatabaseError({ operation: "update sync log (fatal error)", cause: e }),
+        }).pipe(Effect.catchAll(() => Effect.void))
+
+        message.ack()
+      })
+    )
   )
 }

@@ -164,6 +164,13 @@ const validateCommand = Command.make("validate", {}, () =>
   })
 )
 
+const pathCommand = Command.make("path", {}, () =>
+  Effect.gen(function* () {
+    const dbPath = yield* findLocalDb()
+    yield* Console.log(dbPath)
+  })
+)
+
 export const dbCommand = Command.make("db", {}).pipe(
-  Command.withSubcommands([pullCommand, pushCommand, validateCommand])
+  Command.withSubcommands([pullCommand, pushCommand, validateCommand, pathCommand])
 )

@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run dev:api & bun run dev:web",
+    "dev": "bun run dev:e2e",
     "dev:api": "bun run --filter @dogpile/api dev",
     "dev:web": "bun run --filter @dogpile/web dev",
     "dev:all": "bun run --filter '*' dev",
@@ -19,7 +19,8 @@
     "cli": "bun run --filter @dogpile/cli start",
     "db:pull": "bun run cli db pull",
     "db:push": "bun run cli db push",
-    "dev:workers": "wrangler d1 migrations apply dogpile-db --local --config apps/api/wrangler.toml --persist-to apps/api/.wrangler/state && wrangler dev -c apps/api/wrangler.toml -c apps/scraper-processor/wrangler.toml -c apps/embedder/wrangler.toml -c apps/photo-generator/wrangler.toml --persist-to apps/api/.wrangler/state --port 8787 --inspector-port 0",
+    "dev:workers": "wrangler d1 migrations apply dogpile-db --local --config apps/api/wrangler.toml --persist-to apps/api/.wrangler/state && wrangler dev -c apps/api/wrangler.toml -c apps/scraper-processor/wrangler.toml --persist-to apps/api/.wrangler/state --port 8787 --inspector-port 0",
+    "dev:workers:full": "wrangler d1 migrations apply dogpile-db --local --config apps/api/wrangler.toml --persist-to apps/api/.wrangler/state && wrangler dev -c apps/api/wrangler.toml -c apps/scraper-processor/wrangler.toml -c apps/embedder/wrangler.toml -c apps/photo-generator/wrangler.toml --persist-to apps/api/.wrangler/state --port 8787 --inspector-port 0",
     "dev:e2e": "bun run dev:workers & bun run dev:web",
     "prepare": "effect-language-service patch"
   },

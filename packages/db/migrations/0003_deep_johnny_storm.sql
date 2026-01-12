@@ -1,5 +1,7 @@
 PRAGMA foreign_keys=OFF;
 --> statement-breakpoint
+DROP TABLE IF EXISTS `__new_sync_logs`;
+--> statement-breakpoint
 CREATE TABLE `__new_sync_logs` (
 	`id` text PRIMARY KEY NOT NULL,
 	`shelter_id` text NOT NULL,
