@@ -105,6 +105,8 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  // Cache preflight results to reduce noisy OPTIONS spam in dev (and improve UX in general).
+  "Access-Control-Max-Age": "86400",
 }
 
 const json = (data: unknown, status = 200) => {
@@ -1515,7 +1517,7 @@ const notFound = () => json({ error: "Not Found" }, 404)
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders })
+      return new Response(null, { status: 204, headers: corsHeaders })
     }
 
     const url = request.url
