@@ -1,4 +1,4 @@
-import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import Check from "lucide-solid/icons/check"
 import LoaderCircle from "lucide-solid/icons/loader-circle"
 import TriangleAlert from "lucide-solid/icons/triangle-alert"
@@ -104,15 +104,17 @@ async function copyText(text: string): Promise<void> {
 
 export default function AdminJobsQueue(props: Props) {
   const [jobs, { refetch }] = createResource(() => fetchJobs(props.apiUrl, props.adminKey))
-  const [selected, setSelected] = createSignal<Job | null>(null)
+  const [selectedId, setSelectedId] = createSignal<string | null>(null)
   const [copied, setCopied] = createSignal<string | null>(null)
   const [canceling, setCanceling] = createSignal(false)
-  const hasInitialData = () => jobs() !== undefined
+  const [viewJobs, setViewJobs] = createSignal<JobsResponse | undefined>(undefined)
+  let lastViewKey = ""
 
   const pollEveryMs = 5000
   createEffect(() => {
-    const data = jobs()
+    const data = viewJobs()
     if (!data) return
+    if (selectedId()) return
     const shouldPoll = data.jobs.some((j) => j.status === "running")
     if (!shouldPoll) return
     const interval = setInterval(() => refetch(), pollEveryMs)
@@ -120,12 +122,59 @@ export default function AdminJobsQueue(props: Props) {
   })
 
   createEffect(() => {
-    if (!selected()) return
+    if (!selectedId()) return
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelected(null)
+      if (e.key === "Escape") setSelectedId(null)
     }
     window.addEventListener("keydown", onKeyDown)
     onCleanup(() => window.removeEventListener("keydown", onKeyDown))
+  })
+
+  const computeJobKey = (job: Job): string =>
+    [
+      job.id,
+      job.status,
+      job.shelterId,
+      job.shelterName,
+      job.startedAt ?? "",
+      job.finishedAt ?? "",
+      String(job.dogsAdded),
+      String(job.dogsUpdated),
+      String(job.dogsRemoved),
+      job.errorMessage ?? "",
+      job.errors.join("\n"),
+    ].join("|")
+
+  const computeListKey = (list: Job[]): string => list.map((j) => `${j.id}:${computeJobKey(j)}`).join("||")
+
+  createEffect(() => {
+    const data = jobs()
+    if (!data) return
+
+    const nextKey = computeListKey(data.jobs)
+    if (nextKey === lastViewKey) return
+
+    const prev = viewJobs()
+    const prevEntries = new Map<string, { job: Job; key: string }>(
+      (prev?.jobs ?? []).map((j) => [j.id, { job: j, key: computeJobKey(j) }])
+    )
+
+    const nextJobs = data.jobs.map((j) => {
+      const key = computeJobKey(j)
+      const prevEntry = prevEntries.get(j.id)
+      if (prevEntry && prevEntry.key === key) return prevEntry.job
+      return j
+    })
+
+    setViewJobs({ jobs: nextJobs })
+    lastViewKey = nextKey
+  })
+
+  const jobsMap = createMemo(() => new Map((viewJobs()?.jobs ?? []).map((j) => [j.id, j])))
+  const selectedJob = createMemo(() => {
+    const id = selectedId()
+    if (!id) return null
+    return jobsMap().get(id) ?? null
   })
 
   async function handleCopy(label: string, text: string) {
@@ -147,7 +196,7 @@ export default function AdminJobsQueue(props: Props) {
     try {
       await cancelJob(props.apiUrl, props.adminKey, job.id, "Canceled by admin")
       await refetch()
-      setSelected(null)
+      setSelectedId(null)
     } catch (e) {
       console.error("Cancel failed:", e)
     } finally {
@@ -160,17 +209,14 @@ export default function AdminJobsQueue(props: Props) {
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold">
           Scrape Jobs
-          <Show when={jobs()}>
-            <span class="text-gray-500 text-lg ml-2">({jobs()?.jobs.length ?? 0})</span>
+          <Show when={viewJobs()}>
+            <span class="text-gray-500 text-lg ml-2">({viewJobs()?.jobs.length ?? 0})</span>
           </Show>
         </h1>
         <div class="flex items-center gap-3">
-          <Show when={jobs.loading && hasInitialData()}>
-            <span class="text-sm text-gray-500">Refreshing…</span>
-          </Show>
           <button
             onClick={() => refetch()}
-            disabled={jobs.loading && !hasInitialData()}
+            disabled={jobs.loading && !viewJobs()}
             class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 disabled:opacity-50"
           >
             Refresh
@@ -178,25 +224,25 @@ export default function AdminJobsQueue(props: Props) {
         </div>
       </div>
 
-      <Show when={jobs.loading && !hasInitialData()}>
+      <Show when={jobs.loading && !viewJobs()}>
         <div class="bg-white rounded-lg shadow p-6">
           <p class="text-gray-500">Loading...</p>
         </div>
       </Show>
 
-      <Show when={jobs.error}>
+      <Show when={jobs.error && !viewJobs()}>
         <div class="bg-white rounded-lg shadow p-6">
           <p class="text-red-600">Error loading jobs. Check API connection.</p>
         </div>
       </Show>
 
-      <Show when={jobs() && jobs()!.jobs.length === 0}>
+      <Show when={viewJobs() && viewJobs()!.jobs.length === 0}>
         <div class="bg-white rounded-lg shadow p-6 text-center">
           <p class="text-gray-500 text-lg">No scrape jobs recorded</p>
         </div>
       </Show>
 
-      <Show when={jobs() && jobs()!.jobs.length > 0}>
+      <Show when={viewJobs() && viewJobs()!.jobs.length > 0}>
         <div class="bg-white rounded-lg shadow overflow-hidden">
           <table class="w-full">
             <thead class="bg-gray-50">
@@ -211,11 +257,11 @@ export default function AdminJobsQueue(props: Props) {
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-              <For each={jobs()?.jobs}>
+              <For each={viewJobs()?.jobs}>
                 {(job) => (
                   <tr
                     class="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setSelected(job)}
+                    onClick={() => setSelectedId(job.id)}
                     title="Click to view details"
                   >
                     <td class="px-4 py-3">
@@ -263,13 +309,13 @@ export default function AdminJobsQueue(props: Props) {
         </div>
       </Show>
 
-      <Show when={selected()}>
+      <Show when={selectedJob()}>
         {(job) => (
           <div class="fixed inset-0 z-50 flex items-center justify-center">
             <button
               class="absolute inset-0 bg-black/40"
               aria-label="Close"
-              onClick={() => setSelected(null)}
+              onClick={() => setSelectedId(null)}
             />
 
             <div
@@ -324,7 +370,7 @@ export default function AdminJobsQueue(props: Props) {
                   </button>
                   <button
                     class="text-sm bg-gray-200 text-gray-800 px-3 py-1.5 rounded-lg hover:bg-gray-300"
-                    onClick={() => setSelected(null)}
+                    onClick={() => setSelectedId(null)}
                   >
                     Close
                   </button>
