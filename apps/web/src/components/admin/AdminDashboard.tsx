@@ -195,10 +195,16 @@ export default function AdminDashboard(props: Props) {
                           <td class="px-6 py-4">
                             <button
                               onClick={() => handleScrape(shelter.id)}
-                              disabled={scraping() === shelter.id || syncState(shelter) !== "idle"}
+                              disabled={scraping() === shelter.id || syncState(shelter) === "syncing"}
                               class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
                             >
-                              {scraping() === shelter.id ? "Scraping..." : syncState(shelter) === "idle" ? "Scrape Now" : "In Progress"}
+                              {scraping() === shelter.id
+                                ? "Scraping..."
+                                : syncState(shelter) === "idle"
+                                  ? "Scrape Now"
+                                  : syncState(shelter) === "stalled"
+                                    ? "Retry"
+                                    : "In Progress"}
                             </button>
                           </td>
                         </tr>

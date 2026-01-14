@@ -45,6 +45,18 @@ const isAuthorized = (req: Request, env: Env): boolean => {
   return !!(env.ADMIN_KEY && auth === `Bearer ${env.ADMIN_KEY}`)
 }
 
+const toIsoTimestamp = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null
+  if (value instanceof Date) return value.toISOString()
+
+  const raw = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
+  if (!Number.isFinite(raw)) return null
+
+  // Some historic rows stored seconds; current schema uses ms.
+  const ms = raw < 1_000_000_000_000 ? raw * 1000 : raw
+  return new Date(ms).toISOString()
+}
+
 function buildSearchText(dog: any): string {
   const parts: string[] = [`Pies ${dog.name}`]
   
@@ -162,8 +174,8 @@ const routes: Route[] = [
           id: log.id,
           shelterId: log.shelterId,
           shelterName: log.shelterName ?? "Unknown",
-          startedAt: log.startedAt ? new Date(log.startedAt).toISOString() : null,
-          finishedAt: log.finishedAt ? new Date(log.finishedAt).toISOString() : null,
+          startedAt: toIsoTimestamp(log.startedAt),
+          finishedAt: toIsoTimestamp(log.finishedAt),
           dogsAdded: log.dogsAdded,
           dogsUpdated: log.dogsUpdated,
           dogsRemoved: log.dogsRemoved,
@@ -174,6 +186,46 @@ const routes: Route[] = [
       })
 
       return yield* json({ jobs })
+    }),
+  },
+  {
+    method: "POST",
+    pattern: new URLPattern({ pathname: "/admin/jobs/:id/cancel" }),
+    handler: Effect.fn("api.adminCancelJob")(function* (req, env, params) {
+      if (!isAuthorized(req, env)) {
+        return yield* json({ error: "Unauthorized" }, 401)
+      }
+
+      const body = yield* Effect.tryPromise({
+        try: async () => (await req.json().catch(() => ({}))) as { reason?: string },
+        catch: (e) => new DatabaseError({ operation: "parseBody(adminCancelJob)", cause: e }),
+      })
+
+      const reason = (body.reason ?? "Canceled by admin").trim() || "Canceled by admin"
+
+      const db = drizzle(env.DB)
+      const existing = yield* Effect.tryPromise({
+        try: () => db.select().from(syncLogs).where(eq(syncLogs.id, params.id)).get(),
+        catch: (e) => new DatabaseError({ operation: "getJob(adminCancelJob)", cause: e }),
+      })
+
+      if (!existing) return yield* json({ error: "Job not found" }, 404)
+      if (existing.finishedAt) return yield* json({ success: true, message: "Job already finished" })
+
+      yield* Effect.tryPromise({
+        try: () =>
+          db.update(syncLogs)
+            .set({
+              finishedAt: new Date(),
+              errors: [reason],
+              errorMessage: reason,
+            })
+            .where(eq(syncLogs.id, params.id))
+            .run(),
+        catch: (e) => new DatabaseError({ operation: "cancelJob(adminCancelJob)", cause: e }),
+      })
+
+      return yield* json({ success: true })
     }),
   },
   {
@@ -372,13 +424,6 @@ const routes: Route[] = [
       const errorMap = new Map<string, string | null>()
       const startedAtMap = new Map<string, string | null>()
       const finishedAtMap = new Map<string, string | null>()
-
-      const toIsoTimestamp = (value: unknown): string | null => {
-        if (value === null || value === undefined) return null
-        const ms = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
-        if (!Number.isFinite(ms)) return null
-        return new Date(ms).toISOString()
-      }
 
       for (const row of (latestLogs.results || []) as { shelter_id: string; errors: unknown; error_message: unknown; started_at: unknown; finished_at: unknown }[]) {
         const rawMessage = row.error_message

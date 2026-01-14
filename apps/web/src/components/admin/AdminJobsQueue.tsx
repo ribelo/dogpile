@@ -34,6 +34,18 @@ async function fetchJobs(apiUrl: string, adminKey: string): Promise<JobsResponse
   return response.json()
 }
 
+async function cancelJob(apiUrl: string, adminKey: string, jobId: string, reason: string): Promise<void> {
+  const response = await fetch(`${apiUrl}/admin/jobs/${jobId}/cancel`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${adminKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ reason }),
+  })
+  if (!response.ok) throw new Error("Failed to cancel job")
+}
+
 function formatRelativeTime(dateStr: string | null): string {
   if (!dateStr) return "—"
   const date = new Date(dateStr)
@@ -94,6 +106,7 @@ export default function AdminJobsQueue(props: Props) {
   const [jobs, { refetch }] = createResource(() => fetchJobs(props.apiUrl, props.adminKey))
   const [selected, setSelected] = createSignal<Job | null>(null)
   const [copied, setCopied] = createSignal<string | null>(null)
+  const [canceling, setCanceling] = createSignal(false)
 
   const pollEveryMs = 5000
   createEffect(() => {
@@ -121,6 +134,23 @@ export default function AdminJobsQueue(props: Props) {
       setTimeout(() => setCopied(null), 1200)
     } catch {
       // ignore
+    }
+  }
+
+  async function handleCancel(job: Job) {
+    if (canceling()) return
+    const ok = confirm(`Cancel job ${job.id}?\n\nThis will mark it finished with an error so you can retry.`)
+    if (!ok) return
+
+    setCanceling(true)
+    try {
+      await cancelJob(props.apiUrl, props.adminKey, job.id, "Canceled by admin")
+      await refetch()
+      setSelected(null)
+    } catch (e) {
+      console.error("Cancel failed:", e)
+    } finally {
+      setCanceling(false)
     }
   }
 
@@ -295,6 +325,26 @@ export default function AdminJobsQueue(props: Props) {
               </div>
 
               <div class="p-6 space-y-6">
+                <Show when={job().status === "running"}>
+                  <div class="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <div>
+                      <div class="text-sm font-semibold text-orange-800">This job is still marked as running</div>
+                      <div class="mt-1 text-sm text-orange-700">
+                        If it is stale, cancel it to allow a clean retry.
+                      </div>
+                    </div>
+                    <button
+                      class="text-sm bg-orange-600 text-white px-3 py-1.5 rounded-lg hover:bg-orange-700 disabled:opacity-50"
+                      disabled={canceling()}
+                      onClick={() => handleCancel(job())}
+                    >
+                      <Show when={canceling()} fallback="Cancel job">
+                        Canceling...
+                      </Show>
+                    </button>
+                  </div>
+                </Show>
+
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div class="bg-gray-50 rounded-lg p-4">
                     <div class="text-xs text-gray-500 uppercase font-medium">Added</div>
