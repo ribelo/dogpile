@@ -107,6 +107,7 @@ export default function AdminJobsQueue(props: Props) {
   const [selected, setSelected] = createSignal<Job | null>(null)
   const [copied, setCopied] = createSignal<string | null>(null)
   const [canceling, setCanceling] = createSignal(false)
+  const hasInitialData = () => jobs() !== undefined
 
   const pollEveryMs = 5000
   createEffect(() => {
@@ -163,15 +164,21 @@ export default function AdminJobsQueue(props: Props) {
             <span class="text-gray-500 text-lg ml-2">({jobs()?.jobs.length ?? 0})</span>
           </Show>
         </h1>
-        <button
-          onClick={() => refetch()}
-          class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
-        >
-          Refresh
-        </button>
+        <div class="flex items-center gap-3">
+          <Show when={jobs.loading && hasInitialData()}>
+            <span class="text-sm text-gray-500">Refreshing…</span>
+          </Show>
+          <button
+            onClick={() => refetch()}
+            disabled={jobs.loading && !hasInitialData()}
+            class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
-      <Show when={jobs.loading}>
+      <Show when={jobs.loading && !hasInitialData()}>
         <div class="bg-white rounded-lg shadow p-6">
           <p class="text-gray-500">Loading...</p>
         </div>
