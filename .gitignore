@@ -12,5 +12,6 @@ dist/
 .r2-cache/
 
 # Effect source reference (cloned repo)
+.third-party/effect/
 third-party/effect/
 .astro/

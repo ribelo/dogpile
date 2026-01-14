@@ -1,4 +1,5 @@
-import { createEffect, createMemo, createResource, createSignal, For, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js"
+import { createStore, reconcile } from "solid-js/store"
 import Check from "lucide-solid/icons/check"
 import LoaderCircle from "lucide-solid/icons/loader-circle"
 import TriangleAlert from "lucide-solid/icons/triangle-alert"
@@ -103,32 +104,15 @@ async function copyText(text: string): Promise<void> {
 }
 
 export default function AdminJobsQueue(props: Props) {
-  const [jobs, { refetch }] = createResource(() => fetchJobs(props.apiUrl, props.adminKey))
   const [selectedId, setSelectedId] = createSignal<string | null>(null)
   const [copied, setCopied] = createSignal<string | null>(null)
   const [canceling, setCanceling] = createSignal(false)
-  const [viewJobs, setViewJobs] = createSignal<JobsResponse | undefined>(undefined)
-  let lastViewKey = ""
-
-  const pollEveryMs = 5000
-  createEffect(() => {
-    const data = viewJobs()
-    if (!data) return
-    if (selectedId()) return
-    const shouldPoll = data.jobs.some((j) => j.status === "running")
-    if (!shouldPoll) return
-    const interval = setInterval(() => refetch(), pollEveryMs)
-    onCleanup(() => clearInterval(interval))
-  })
-
-  createEffect(() => {
-    if (!selectedId()) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedId(null)
-    }
-    window.addEventListener("keydown", onKeyDown)
-    onCleanup(() => window.removeEventListener("keydown", onKeyDown))
-  })
+  const [fetching, setFetching] = createSignal(false)
+  const [pendingManualRefresh, setPendingManualRefresh] = createSignal(false)
+  const [state, setState] = createStore<{ jobs: Job[] }>({ jobs: [] })
+  const [initialLoading, setInitialLoading] = createSignal(true)
+  const [loadError, setLoadError] = createSignal<string | null>(null)
+  const [manualRefreshing, setManualRefreshing] = createSignal(false)
 
   const computeJobKey = (job: Job): string =>
     [
@@ -145,32 +129,77 @@ export default function AdminJobsQueue(props: Props) {
       job.errors.join("\n"),
     ].join("|")
 
-  const computeListKey = (list: Job[]): string => list.map((j) => `${j.id}:${computeJobKey(j)}`).join("||")
+  const computeListKey = (jobs: Job[]): string => jobs.map((j) => computeJobKey(j)).join("||")
+
+  let lastListKey = ""
+  let requestInFlight = false
+
+  const fetchAndReconcileJobs = async (mode: "initial" | "poll" | "manual") => {
+    if (requestInFlight) {
+      if (mode === "manual") {
+        setPendingManualRefresh(true)
+        setManualRefreshing(true)
+      }
+      return
+    }
+    requestInFlight = true
+    setFetching(true)
+
+    if (mode === "initial") setInitialLoading(true)
+    if (mode === "manual") setManualRefreshing(true)
+
+    try {
+      const data = await fetchJobs(props.apiUrl, props.adminKey)
+      const nextKey = computeListKey(data.jobs)
+      if (nextKey !== lastListKey) {
+        setState("jobs", reconcile(data.jobs, { key: "id" }))
+        lastListKey = nextKey
+      }
+      setLoadError(null)
+    } catch (e) {
+      if (mode !== "poll") {
+        setLoadError(String(e))
+      }
+    } finally {
+      if (mode === "initial") {
+        setInitialLoading(false)
+      }
+      if (mode === "manual") {
+        setManualRefreshing(false)
+      }
+      setFetching(false)
+      requestInFlight = false
+    }
+  }
 
   createEffect(() => {
-    const data = jobs()
-    if (!data) return
-
-    const nextKey = computeListKey(data.jobs)
-    if (nextKey === lastViewKey) return
-
-    const prev = viewJobs()
-    const prevEntries = new Map<string, { job: Job; key: string }>(
-      (prev?.jobs ?? []).map((j) => [j.id, { job: j, key: computeJobKey(j) }])
-    )
-
-    const nextJobs = data.jobs.map((j) => {
-      const key = computeJobKey(j)
-      const prevEntry = prevEntries.get(j.id)
-      if (prevEntry && prevEntry.key === key) return prevEntry.job
-      return j
-    })
-
-    setViewJobs({ jobs: nextJobs })
-    lastViewKey = nextKey
+    fetchAndReconcileJobs("initial")
   })
 
-  const jobsMap = createMemo(() => new Map((viewJobs()?.jobs ?? []).map((j) => [j.id, j])))
+  createEffect(() => {
+    if (!pendingManualRefresh()) return
+    if (fetching() || initialLoading()) return
+    setPendingManualRefresh(false)
+    fetchAndReconcileJobs("manual")
+  })
+
+  const pollEveryMs = 5000
+  createEffect(() => {
+    if (initialLoading()) return
+    const interval = setInterval(() => fetchAndReconcileJobs("poll"), pollEveryMs)
+    onCleanup(() => clearInterval(interval))
+  })
+
+  createEffect(() => {
+    if (!selectedId()) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedId(null)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    onCleanup(() => window.removeEventListener("keydown", onKeyDown))
+  })
+
+  const jobsMap = createMemo(() => new Map(state.jobs.map((j) => [j.id, j])))
   const selectedJob = createMemo(() => {
     const id = selectedId()
     if (!id) return null
@@ -195,7 +224,7 @@ export default function AdminJobsQueue(props: Props) {
     setCanceling(true)
     try {
       await cancelJob(props.apiUrl, props.adminKey, job.id, "Canceled by admin")
-      await refetch()
+      await fetchAndReconcileJobs("manual")
       setSelectedId(null)
     } catch (e) {
       console.error("Cancel failed:", e)
@@ -209,40 +238,42 @@ export default function AdminJobsQueue(props: Props) {
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-2xl font-bold">
           Scrape Jobs
-          <Show when={viewJobs()}>
-            <span class="text-gray-500 text-lg ml-2">({viewJobs()?.jobs.length ?? 0})</span>
+          <Show when={!initialLoading()}>
+            <span class="text-gray-500 text-lg ml-2">({state.jobs.length})</span>
           </Show>
         </h1>
         <div class="flex items-center gap-3">
           <button
-            onClick={() => refetch()}
-            disabled={jobs.loading && !viewJobs()}
+            onClick={() => fetchAndReconcileJobs("manual")}
+            disabled={initialLoading() || manualRefreshing() || fetching()}
             class="text-sm bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 disabled:opacity-50"
           >
-            Refresh
+            <Show when={manualRefreshing()} fallback="Refresh">
+              Refreshing…
+            </Show>
           </button>
         </div>
       </div>
 
-      <Show when={jobs.loading && !viewJobs()}>
+      <Show when={initialLoading()}>
         <div class="bg-white rounded-lg shadow p-6">
           <p class="text-gray-500">Loading...</p>
         </div>
       </Show>
 
-      <Show when={jobs.error && !viewJobs()}>
+      <Show when={loadError() && !initialLoading()}>
         <div class="bg-white rounded-lg shadow p-6">
           <p class="text-red-600">Error loading jobs. Check API connection.</p>
         </div>
       </Show>
 
-      <Show when={viewJobs() && viewJobs()!.jobs.length === 0}>
+      <Show when={!initialLoading() && state.jobs.length === 0}>
         <div class="bg-white rounded-lg shadow p-6 text-center">
           <p class="text-gray-500 text-lg">No scrape jobs recorded</p>
         </div>
       </Show>
 
-      <Show when={viewJobs() && viewJobs()!.jobs.length > 0}>
+      <Show when={!initialLoading() && state.jobs.length > 0}>
         <div class="bg-white rounded-lg shadow overflow-hidden">
           <table class="w-full">
             <thead class="bg-gray-50">
@@ -257,7 +288,7 @@ export default function AdminJobsQueue(props: Props) {
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-              <For each={viewJobs()?.jobs}>
+              <For each={state.jobs}>
                 {(job) => (
                   <tr
                     class="hover:bg-gray-50 cursor-pointer"

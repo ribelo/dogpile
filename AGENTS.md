@@ -167,7 +167,7 @@ When building shelter scrapers:
 
 Topics include: services and layers, data modeling, error handling, configuration, testing, HTTP clients, CLIs, observability, and project structure.
 
-**Effect Source Reference:** `third-party/effect`
+**Effect Source Reference:** `.third-party/effect`
 Search here for real implementations when docs aren't enough.
 <!-- effect-solutions:end -->
 
