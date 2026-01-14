@@ -37,10 +37,11 @@ export const extractWrzesniaPsijacielDogUrlsFromListing = (html: string): readon
   const urls = new Set<string>()
 
   const links = [...document.querySelectorAll('a[href*="/index.php/20"]')]
-    .map((a) => a.getAttribute("href"))
-    .filter((href): href is string =>
-      typeof href === "string" &&
+    .map((a) => a.getAttribute("href")?.trim() ?? "")
+    .filter((href) =>
+      href.length > 0 &&
       href.includes("/index.php/20") &&
+      href.match(/\/index\.php\/20\d{2}\/\d{2}\/\d{2}\//) &&
       !href.includes("aktualnosci") &&
       !href.includes("znalazly-dom") &&
       !href.includes("za-teczowym")
@@ -48,8 +49,14 @@ export const extractWrzesniaPsijacielDogUrlsFromListing = (html: string): readon
 
   for (const href of links) {
     if (urls.size >= MAX_DOGS) break
-    const fullUrl = href.startsWith("http") ? href : BASE_URL + href
-    urls.add(fullUrl.replace(/\/$/, "") + "/")
+    try {
+      const fullUrl = new URL(href, BASE_URL)
+      fullUrl.hash = ""
+      fullUrl.search = ""
+      urls.add(fullUrl.toString().replace(/\/$/, "") + "/")
+    } catch {
+      // ignore invalid URLs
+    }
   }
   return [...urls]
 }
@@ -57,12 +64,21 @@ export const extractWrzesniaPsijacielDogUrlsFromListing = (html: string): readon
 export const extractWrzesniaPsijacielDogFromDetailPage = (html: string, url: string): RawDogData => {
   const document = parseDocument(html)
 
-  const urlMatch = url.match(/\/(\d{4}\/\d{2}\/\d{2}\/[^/]+)\/?$/)
-  const slug = urlMatch ? urlMatch[1].replace(/\//g, "-") : url.split("/").filter(Boolean).pop() ?? url
-  const externalId = slug
+  let pathname = url.trim()
+  try {
+    pathname = new URL(url.trim()).pathname
+  } catch {
+    // keep best-effort pathname
+  }
+
+  const urlMatch = pathname.match(/\/(\d{4}\/\d{2}\/\d{2}\/[^/]+)\/?$/)
+  if (!urlMatch) throw new Error(`Invalid dog detail URL: ${url}`)
+
+  const externalId = urlMatch[1].replace(/\//g, "-").trim()
+  if (externalId.length === 0) throw new Error(`Invalid dog externalId for URL: ${url}`)
 
   const h1 = document.querySelector("h1")
-  const name = h1?.textContent?.trim() ?? externalId
+  const name = h1?.textContent?.trim() || externalId
 
   const contentDivs = [...document.querySelectorAll(".entry-content p, .entry-content, article p")]
     .map((p) => p.textContent?.trim() ?? "")

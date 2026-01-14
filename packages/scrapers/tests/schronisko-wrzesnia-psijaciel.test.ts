@@ -34,4 +34,16 @@ describe("schronisko-wrzesnia-psijaciel adapter helpers", () => {
     expect(dog.photos.length).toBeGreaterThan(0)
     expect(dog.photos[0]).toContain("wp-content/uploads")
   })
+
+  test("extractDogDetailFromHtml falls back to externalId when h1 is empty/whitespace", () => {
+    const html = "<html><body><h1> </h1><div class='entry-content'><p>Opis psa</p></div></body></html>"
+    const dog = extractWrzesniaPsijacielDogFromDetailPage(
+      html,
+      "https://psi-jaciel.pl/index.php/2025/03/12/jocker-2/?utm_source=test#x",
+    )
+
+    expect(dog.externalId).toBe("2025-03-12-jocker-2")
+    expect(dog.name).toBe("2025-03-12-jocker-2")
+    expect(dog.fingerprint).toBe("schronisko-wrzesnia-psijaciel:2025-03-12-jocker-2")
+  })
 })
