@@ -138,6 +138,43 @@ const routes: Route[] = [
 
       const db = drizzle(env.DB)
 
+      // GC: if a worker crashes mid-flight, we can end up with "running" jobs forever.
+      // There's no reliable way to introspect queue state, so we treat old "running" jobs as failed.
+      const STALE_AFTER_MS = 2 * 60 * 60 * 1000
+      const nowMs = Date.now()
+      const staleBeforeMs = nowMs - STALE_AFTER_MS
+      const staleBeforeSec = Math.floor(staleBeforeMs / 1000)
+      const finishedMs = nowMs
+      const finishedSec = Math.floor(finishedMs / 1000)
+      const staleErrorMessage = "Stale job timeout (no worker completion)"
+      const staleErrorsJson = JSON.stringify([staleErrorMessage])
+
+      const gcSeconds = Effect.tryPromise({
+        try: () =>
+          env.DB.prepare(
+            `UPDATE sync_logs
+             SET finished_at = ?, errors = ?, error_message = ?
+             WHERE finished_at IS NULL AND started_at < 1000000000000 AND started_at < ?`
+          )
+            .bind(finishedSec, staleErrorsJson, staleErrorMessage, staleBeforeSec)
+            .run(),
+        catch: (e) => new DatabaseError({ operation: "gc stale jobs (seconds)", cause: e }),
+      })
+
+      const gcMillis = Effect.tryPromise({
+        try: () =>
+          env.DB.prepare(
+            `UPDATE sync_logs
+             SET finished_at = ?, errors = ?, error_message = ?
+             WHERE finished_at IS NULL AND started_at >= 1000000000000 AND started_at < ?`
+          )
+            .bind(finishedMs, staleErrorsJson, staleErrorMessage, staleBeforeMs)
+            .run(),
+        catch: (e) => new DatabaseError({ operation: "gc stale jobs (ms)", cause: e }),
+      })
+
+      yield* Effect.zipRight(gcSeconds, gcMillis).pipe(Effect.catchAll(() => Effect.void))
+
       const logs = yield* Effect.tryPromise({
         try: () =>
           db.select({
