@@ -1,4 +1,4 @@
-import { createResource, For, Show } from "solid-js"
+import { createEffect, createResource, createSignal, For, onCleanup, Show } from "solid-js"
 import Check from "lucide-solid/icons/check"
 import LoaderCircle from "lucide-solid/icons/loader-circle"
 import TriangleAlert from "lucide-solid/icons/triangle-alert"
@@ -61,8 +61,68 @@ function formatDuration(startedAt: string | null, finishedAt: string | null): st
   return `${diffMins}m ${diffSecs % 60}s`
 }
 
+function formatTimestamp(dateStr: string | null): string {
+  if (!dateStr) return "—"
+  const d = new Date(dateStr)
+  if (!Number.isFinite(d.getTime())) return "—"
+  return d.toLocaleString()
+}
+
+function shortId(id: string): string {
+  if (id.length <= 12) return id
+  return `${id.slice(0, 8)}…${id.slice(-4)}`
+}
+
+async function copyText(text: string): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const el = document.createElement("textarea")
+  el.value = text
+  el.setAttribute("readonly", "true")
+  el.style.position = "fixed"
+  el.style.top = "-9999px"
+  document.body.appendChild(el)
+  el.select()
+  document.execCommand("copy")
+  document.body.removeChild(el)
+}
+
 export default function AdminJobsQueue(props: Props) {
   const [jobs, { refetch }] = createResource(() => fetchJobs(props.apiUrl, props.adminKey))
+  const [selected, setSelected] = createSignal<Job | null>(null)
+  const [copied, setCopied] = createSignal<string | null>(null)
+
+  const pollEveryMs = 5000
+  createEffect(() => {
+    const data = jobs()
+    if (!data) return
+    const shouldPoll = data.jobs.some((j) => j.status === "running")
+    if (!shouldPoll) return
+    const interval = setInterval(() => refetch(), pollEveryMs)
+    onCleanup(() => clearInterval(interval))
+  })
+
+  createEffect(() => {
+    if (!selected()) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(null)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    onCleanup(() => window.removeEventListener("keydown", onKeyDown))
+  })
+
+  async function handleCopy(label: string, text: string) {
+    try {
+      await copyText(text)
+      setCopied(label)
+      setTimeout(() => setCopied(null), 1200)
+    } catch {
+      // ignore
+    }
+  }
 
   return (
     <div>
@@ -116,7 +176,11 @@ export default function AdminJobsQueue(props: Props) {
             <tbody class="divide-y divide-gray-200">
               <For each={jobs()?.jobs}>
                 {(job) => (
-                  <tr class="hover:bg-gray-50">
+                  <tr
+                    class="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setSelected(job)}
+                    title="Click to view details"
+                  >
                     <td class="px-4 py-3">
                       <Show when={job.status === "running"}>
                         <span class="text-blue-600 flex items-center gap-1">
@@ -135,7 +199,11 @@ export default function AdminJobsQueue(props: Props) {
                       </Show>
                     </td>
                     <td class="px-4 py-3">
-                      <a href={`/admin/dogs?shelter=${job.shelterId}`} class="text-blue-600 hover:underline">
+                      <a
+                        href={`/admin/dogs?shelter=${job.shelterId}`}
+                        class="text-blue-600 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {job.shelterName}
                       </a>
                     </td>
@@ -156,6 +224,151 @@ export default function AdminJobsQueue(props: Props) {
             </tbody>
           </table>
         </div>
+      </Show>
+
+      <Show when={selected()}>
+        {(job) => (
+          <div class="fixed inset-0 z-50 flex items-center justify-center">
+            <button
+              class="absolute inset-0 bg-black/40"
+              aria-label="Close"
+              onClick={() => setSelected(null)}
+            />
+
+            <div
+              role="dialog"
+              aria-modal="true"
+              class="relative z-10 w-full max-w-3xl mx-4 bg-white rounded-xl shadow-xl overflow-hidden"
+            >
+              <div class="flex items-start justify-between px-6 py-4 border-b border-gray-200">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <Show when={job().status === "running"}>
+                      <span class="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                        <LoaderCircle size={12} class="animate-spin" /> Running
+                      </span>
+                    </Show>
+                    <Show when={job().status === "success"}>
+                      <span class="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded">
+                        <Check size={12} /> Success
+                      </span>
+                    </Show>
+                    <Show when={job().status === "error"}>
+                      <span class="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 px-2 py-1 rounded">
+                        <TriangleAlert size={12} /> Error
+                      </span>
+                    </Show>
+                    <span class="text-sm text-gray-500">Job</span>
+                    <span class="font-mono text-sm">{shortId(job().id)}</span>
+                  </div>
+                  <div class="mt-1 text-lg font-semibold">{job().shelterName}</div>
+                  <div class="mt-1 text-sm text-gray-500">
+                    Started {formatTimestamp(job().startedAt)} · Finished {formatTimestamp(job().finishedAt)} ·{" "}
+                    {formatDuration(job().startedAt, job().finishedAt)}
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <button
+                    class="text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+                    onClick={() => handleCopy("job-json", JSON.stringify(job(), null, 2))}
+                  >
+                    <Show when={copied() === "job-json"} fallback="Copy JSON">
+                      Copied
+                    </Show>
+                  </button>
+                  <button
+                    class="text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+                    onClick={() => handleCopy("job-id", job().id)}
+                  >
+                    <Show when={copied() === "job-id"} fallback="Copy ID">
+                      Copied
+                    </Show>
+                  </button>
+                  <button
+                    class="text-sm bg-gray-200 text-gray-800 px-3 py-1.5 rounded-lg hover:bg-gray-300"
+                    onClick={() => setSelected(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              <div class="p-6 space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-xs text-gray-500 uppercase font-medium">Added</div>
+                    <div class="text-2xl font-bold text-gray-900">{job().dogsAdded}</div>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-xs text-gray-500 uppercase font-medium">Updated</div>
+                    <div class="text-2xl font-bold text-gray-900">{job().dogsUpdated}</div>
+                  </div>
+                  <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="text-xs text-gray-500 uppercase font-medium">Removed</div>
+                    <div class="text-2xl font-bold text-gray-900">{job().dogsRemoved}</div>
+                  </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                  <a
+                    class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700"
+                    href={`/admin/shelters/${job().shelterId}`}
+                  >
+                    Open shelter
+                  </a>
+                  <a
+                    class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700"
+                    href={`/admin/dogs?shelter=${job().shelterId}`}
+                  >
+                    Open dogs
+                  </a>
+                </div>
+
+                <Show when={job().errorMessage}>
+                  <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="text-sm font-semibold text-red-800">Error</div>
+                    <div class="mt-1 text-sm text-red-700 font-mono whitespace-pre-wrap break-words">
+                      {job().errorMessage}
+                    </div>
+                  </div>
+                </Show>
+
+                <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                    <div class="text-sm font-semibold text-gray-900">
+                      Errors <span class="text-gray-500">({job().errors.length})</span>
+                    </div>
+                    <Show when={job().errors.length > 0}>
+                      <button
+                        class="text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200"
+                        onClick={() => handleCopy("errors", job().errors.join("\n"))}
+                      >
+                        <Show when={copied() === "errors"} fallback="Copy errors">
+                          Copied
+                        </Show>
+                      </button>
+                    </Show>
+                  </div>
+                  <div class="max-h-64 overflow-auto p-4">
+                    <Show
+                      when={job().errors.length > 0}
+                      fallback={<div class="text-sm text-gray-500">No per-dog errors recorded.</div>}
+                    >
+                      <ol class="list-decimal pl-5 space-y-2">
+                        <For each={job().errors}>
+                          {(err) => (
+                            <li class="text-sm font-mono text-gray-800 whitespace-pre-wrap break-words">{err}</li>
+                          )}
+                        </For>
+                      </ol>
+                    </Show>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </Show>
     </div>
   )
