@@ -1371,26 +1371,27 @@ const routes: Route[] = [
       return yield* json({ queued: jobs.length })
     }),
   },
-  {
-    method: "GET",
-    pattern: new URLPattern({ pathname: "/admin/sync-stats" }),
-    handler: Effect.fn("api.syncStats")(function* (req, env) {
+	  {
+	    method: "GET",
+	    pattern: new URLPattern({ pathname: "/admin/sync-stats" }),
+	    handler: Effect.fn("api.syncStats")(function* (req, env) {
       const authHeader = req.headers.get("Authorization")
       if (authHeader !== `Bearer ${env.ADMIN_KEY}`) {
         return yield* json({ error: "Unauthorized" }, 401)
       }
 
-      const db = drizzle(env.DB)
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+	      const db = drizzle(env.DB)
+	      const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+	      const startedAtMs = sql<number>`CASE WHEN ${syncLogs.startedAt} < 1000000000000 THEN ${syncLogs.startedAt} * 1000 ELSE ${syncLogs.startedAt} END`
 
-      const logs = yield* Effect.tryPromise({
-        try: () =>
-          db.select().from(syncLogs)
-            .where(sql`${syncLogs.startedAt} > ${since.getTime()}`)
-            .orderBy(desc(syncLogs.startedAt))
-            .all(),
-        catch: (e) => new DatabaseError({ operation: "get sync stats", cause: e })
-      })
+	      const logs = yield* Effect.tryPromise({
+	        try: () =>
+	          db.select().from(syncLogs)
+	            .where(sql`${startedAtMs} > ${since.getTime()}`)
+	            .orderBy(desc(startedAtMs))
+	            .all(),
+	        catch: (e) => new DatabaseError({ operation: "get sync stats", cause: e })
+	      })
 
       const total = logs.length
       const successful = logs.filter(l => l.errors.length === 0).length
@@ -1431,14 +1432,15 @@ const routes: Route[] = [
         return yield* json({ error: "Invalid from/to" }, 400)
       }
 
-      const groupBy = groupByParam === "day" || groupByParam === "model" || groupByParam === "operation"
-        ? groupByParam
-        : "day"
+	      const groupBy = groupByParam === "day" || groupByParam === "model" || groupByParam === "operation"
+	        ? groupByParam
+	        : "day"
 
-      const rangeFilter = and(
-        sql`${apiCosts.createdAt} >= ${from.getTime()}`,
-        sql`${apiCosts.createdAt} <= ${to.getTime()}`
-      )
+	      const createdAtMs = sql<number>`CASE WHEN ${apiCosts.createdAt} < 1000000000000 THEN ${apiCosts.createdAt} * 1000 ELSE ${apiCosts.createdAt} END`
+	      const rangeFilter = and(
+	        sql`${createdAtMs} >= ${from.getTime()}`,
+	        sql`${createdAtMs} <= ${to.getTime()}`
+	      )
 
       const totalData = yield* Effect.tryPromise({
         try: () => db.select({
@@ -1458,15 +1460,15 @@ const routes: Route[] = [
         tokens: sql<number>`SUM(${apiCosts.inputTokens} + ${apiCosts.outputTokens})`,
       } as const
 
-      const breakdown: CostsResponse["breakdown"] =
-        groupBy === "day"
-          ? yield* Effect.tryPromise({
-              try: () => {
-                const dateExpr = sql<string>`strftime('%Y-%m-%d', ${apiCosts.createdAt} / 1000, 'unixepoch')`
-                return db
-                  .select({ date: dateExpr, ...totals })
-                  .from(apiCosts)
-                  .where(rangeFilter)
+	      const breakdown: CostsResponse["breakdown"] =
+	        groupBy === "day"
+	          ? yield* Effect.tryPromise({
+	              try: () => {
+	                const dateExpr = sql<string>`strftime('%Y-%m-%d', ${createdAtMs} / 1000, 'unixepoch')`
+	                return db
+	                  .select({ date: dateExpr, ...totals })
+	                  .from(apiCosts)
+	                  .where(rangeFilter)
                   .groupBy(dateExpr)
                   .orderBy(dateExpr)
                   .all()

@@ -1,4 +1,5 @@
 import { createResource, For, Show } from "solid-js"
+import { createSignal } from "solid-js"
 
 interface Shelter {
   id: string
@@ -51,6 +52,25 @@ function formatRelativeTime(dateStr: string | null): string {
 
 export default function AdminSheltersList(props: Props) {
   const [data, { refetch }] = createResource(() => fetchShelters(props.apiUrl, props.adminKey))
+  const [pending, setPending] = createSignal<Record<string, boolean>>({})
+  const [errors, setErrors] = createSignal<Record<string, string | null>>({})
+
+  const handleScrape = async (id: string) => {
+    setPending(prev => ({ ...prev, [id]: true }))
+    setErrors(prev => ({ ...prev, [id]: null }))
+    try {
+      const response = await fetch(`${props.apiUrl}/admin/shelters/${id}/scrape`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${props.adminKey}` }
+      })
+      if (!response.ok) throw new Error("Scrape failed")
+      await refetch()
+    } catch (e) {
+      setErrors(prev => ({ ...prev, [id]: e instanceof Error ? e.message : "Scrape failed" }))
+    } finally {
+      setPending(prev => ({ ...prev, [id]: false }))
+    }
+  }
 
   return (
     <div>
@@ -129,7 +149,17 @@ export default function AdminSheltersList(props: Props) {
                         <a href={`/admin/dogs?shelterId=${shelter.id}`} class="text-sm text-blue-600 hover:underline">
                           Dogs
                         </a>
+                        <button
+                          onClick={() => handleScrape(shelter.id)}
+                          disabled={pending()[shelter.id]}
+                          class="text-sm text-blue-600 hover:underline disabled:text-gray-400"
+                        >
+                          {pending()[shelter.id] ? "Scraping..." : "Scrape Now"}
+                        </button>
                       </div>
+                      <Show when={errors()[shelter.id]}>
+                        <div class="text-[10px] text-red-600 mt-1">{errors()[shelter.id]}</div>
+                      </Show>
                     </td>
                   </tr>
                 )}
@@ -141,4 +171,3 @@ export default function AdminSheltersList(props: Props) {
     </div>
   )
 }
-

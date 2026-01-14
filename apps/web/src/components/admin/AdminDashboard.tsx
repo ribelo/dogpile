@@ -2,6 +2,9 @@ import { createEffect, createResource, createSignal, For, onCleanup, Show } from
 import Check from "lucide-solid/icons/check"
 import LoaderCircle from "lucide-solid/icons/loader-circle"
 import TriangleAlert from "lucide-solid/icons/triangle-alert"
+import Clock from "lucide-solid/icons/clock"
+import ExternalLink from "lucide-solid/icons/external-link"
+import History from "lucide-solid/icons/history"
 import CostStats from "./CostStats"
 
 interface DogStats {
@@ -28,6 +31,24 @@ interface StatsResponse {
   shelters: Shelter[]
 }
 
+interface Job {
+  id: string
+  shelterId: string
+  shelterName: string
+  startedAt: string | null
+  finishedAt: string | null
+  dogsAdded: number
+  dogsUpdated: number
+  dogsRemoved: number
+  errors: string[]
+  errorMessage: string | null
+  status: "running" | "error" | "success"
+}
+
+interface JobsResponse {
+  jobs: Job[]
+}
+
 interface Props {
   apiUrl: string
   adminKey: string
@@ -38,6 +59,14 @@ async function fetchStats(apiUrl: string, adminKey: string): Promise<StatsRespon
     headers: { Authorization: `Bearer ${adminKey}` }
   })
   if (!response.ok) throw new Error("Failed to fetch stats")
+  return response.json()
+}
+
+async function fetchJobs(apiUrl: string, adminKey: string): Promise<JobsResponse> {
+  const response = await fetch(`${apiUrl}/admin/jobs?limit=20`, {
+    headers: { Authorization: `Bearer ${adminKey}` }
+  })
+  if (!response.ok) throw new Error("Failed to fetch jobs")
   return response.json()
 }
 
@@ -66,7 +95,8 @@ function formatRelativeTime(dateStr: string | null): string {
 
 export default function AdminDashboard(props: Props) {
   const [stats, { refetch }] = createResource(() => fetchStats(props.apiUrl, props.adminKey))
-  const [scraping, setScraping] = createSignal<string | null>(null)
+  const [jobs, { refetch: refetchJobs }] = createResource(() => fetchJobs(props.apiUrl, props.adminKey))
+  const [scraping, setScraping] = createSignal<Record<string, boolean>>({})
 
   const stalledAfterMs = 60 * 60 * 1000
   const pollEveryMs = 5000
@@ -78,32 +108,53 @@ export default function AdminDashboard(props: Props) {
     return Date.now() - startedAtMs > stalledAfterMs ? "stalled" : "syncing"
   }
 
+  const isStalled = (shelter: Shelter) => syncState(shelter) === "stalled"
+  const hasError = (shelter: Shelter) => !!shelter.lastError
+
   createEffect(() => {
-    const data = stats()
-    if (!data) return
-    const shouldPoll = data.shelters.some(s => syncState(s) !== "idle")
+    const statsData = stats()
+    const jobsData = jobs()
+    const shouldPoll = 
+      (statsData?.shelters.some(s => syncState(s) !== "idle")) ||
+      (jobsData?.jobs.some(j => j.status === "running"))
+
     if (!shouldPoll) return
-    const interval = setInterval(() => refetch(), pollEveryMs)
+    const interval = setInterval(() => {
+      refetch()
+      refetchJobs()
+    }, pollEveryMs)
     onCleanup(() => clearInterval(interval))
   })
 
   async function handleScrape(shelterId: string) {
-    setScraping(shelterId)
+    setScraping(prev => ({ ...prev, [shelterId]: true }))
     try {
       await triggerScrape(props.apiUrl, props.adminKey, shelterId)
       refetch()
+      refetchJobs()
     } catch (e) {
       console.error("Scrape failed:", e)
     } finally {
-      setScraping(null)
+      setScraping(prev => ({ ...prev, [shelterId]: false }))
     }
   }
 
   return (
     <div>
-      <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+      <div class="flex items-center justify-between mb-8">
+        <h1 class="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <div class="flex gap-2">
+          <button 
+            onClick={() => { refetch(); refetchJobs() }}
+            class="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+            title="Refresh"
+          >
+            <History size={20} class={(stats.loading || jobs.loading) ? "animate-spin" : ""} />
+          </button>
+        </div>
+      </div>
 
-      <Show when={stats.loading}>
+      <Show when={stats.loading && !stats()}>
         <p class="text-gray-500">Loading...</p>
       </Show>
 
@@ -111,107 +162,120 @@ export default function AdminDashboard(props: Props) {
         <p class="text-red-600">Error loading stats. Check API connection.</p>
       </Show>
 
-      <Show when={stats()}>
+      <Show when={stats()} keyed>
         {(data) => (
           <>
-            {/* Stats Cards */}
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <a href="/admin/dogs?status=pending" class="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
-                <h2 class="text-sm font-medium text-gray-500 uppercase">Pending</h2>
-                <p class="text-3xl font-bold text-yellow-600">{data().dogs.pending}</p>
-              </a>
-              <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-sm font-medium text-gray-500 uppercase">Published</h2>
-                <p class="text-3xl font-bold text-green-600">{data().dogs.available}</p>
-              </div>
-              <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-sm font-medium text-gray-500 uppercase">Removed</h2>
-                <p class="text-3xl font-bold text-gray-600">{data().dogs.removed}</p>
-              </div>
-              <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-sm font-medium text-gray-500 uppercase">Total</h2>
-                <p class="text-3xl font-bold text-blue-600">{data().dogs.total}</p>
-              </div>
+            {/* KPI Cards */}
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+              <KPICard 
+                label="Pending" 
+                value={data.dogs.pending} 
+                href="/admin/dogs?status=pending" 
+                color="text-yellow-600"
+                icon={<Clock class="text-yellow-500/20" size={48} />}
+              />
+              <KPICard 
+                label="Available" 
+                value={data.dogs.available} 
+                href="/admin/dogs?status=available" 
+                color="text-green-600"
+                icon={<Check class="text-green-500/20" size={48} />}
+              />
+              <KPICard 
+                label="Removed" 
+                value={data.dogs.removed} 
+                href="/admin/dogs?status=removed" 
+                color="text-gray-600"
+                icon={<TriangleAlert class="text-gray-500/20" size={48} />}
+              />
+              <KPICard 
+                label="Total" 
+                value={data.dogs.total} 
+                href="/admin/dogs?status=all" 
+                color="text-blue-600"
+                icon={<History class="text-blue-500/20" size={48} />}
+              />
             </div>
 
-            {/* Shelters Table */}
-            <div class="bg-white rounded-lg shadow">
-              <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold">Shelters</h2>
-              </div>
-              <div class="overflow-x-auto">
-                <table class="w-full">
-                  <thead class="bg-gray-50">
-                    <tr>
-                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dogs</th>
-                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Sync</th>
-                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-200">
-                    <For each={data().shelters}>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+              {/* Needs Attention */}
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <h2 class="text-xl font-bold flex items-center gap-2">
+                    <TriangleAlert class="text-red-500" size={20} />
+                    Needs Attention
+                  </h2>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 divide-y overflow-hidden">
+                  <Show 
+                    when={data.shelters.some(s => isStalled(s) || hasError(s))}
+                    fallback={<div class="p-8 text-center text-gray-500">Everything looks good!</div>}
+                  >
+                    <For each={data.shelters.filter(s => isStalled(s) || hasError(s))}>
                       {(shelter) => (
-                        <tr class="hover:bg-gray-50">
-                          <td class="px-6 py-4">
-                            <a href={`/admin/dogs?shelter=${shelter.id}`} class="text-blue-600 hover:underline">
-                              {shelter.name}
-                            </a>
-                          </td>
-                          <td class="px-6 py-4">{shelter.dogCount}</td>
-                         <td class="px-6 py-4 text-gray-500">
-                            <Show
-                              when={syncState(shelter) !== "idle"}
-                              fallback={formatRelativeTime(shelter.syncFinishedAt ?? shelter.lastSync)}
-                            >
-                              Started {formatRelativeTime(shelter.syncStartedAt)}
-                            </Show>
-                          </td>
-                         <td class="px-6 py-4">
-                          <Show
-                            when={syncState(shelter) === "syncing"}
-                            fallback={
-                              <Show
-                                when={syncState(shelter) === "stalled"}
-                                fallback={
-                                  <Show
-                                    when={shelter.lastError}
-                                    fallback={<span class="text-green-600 flex items-center gap-1"><Check size={14} /> Finished</span>}
-                                  >
-                                    <span class="text-red-600 flex items-center gap-1" title={shelter.lastError ?? ""}><TriangleAlert size={14} /> Finished (Error)</span>
-                                  </Show>
-                                }
-                              >
-                                <span class="text-orange-600 flex items-center gap-1" title={shelter.syncStartedAt ?? ""}><TriangleAlert size={14} /> Stalled</span>
+                        <div class="p-4 flex items-center justify-between hover:bg-gray-50">
+                          <div>
+                            <div class="font-medium">{shelter.name}</div>
+                            <div class="text-sm text-red-600 flex items-center gap-1">
+                              <Show when={isStalled(shelter)} fallback={shelter.lastError}>
+                                Sync stalled (started {formatRelativeTime(shelter.syncStartedAt)})
                               </Show>
-                            }
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleScrape(shelter.id)}
+                            disabled={scraping()[shelter.id] || syncState(shelter) === "syncing"}
+                            class="text-xs bg-red-50 text-red-700 border border-red-100 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors font-medium disabled:opacity-50"
                           >
-                            <span class="text-blue-600 flex items-center gap-1" title={shelter.syncStartedAt ?? ""}>
-                              <LoaderCircle size={14} class="animate-spin" /> Syncing
-                            </span>
-                          </Show>
-                          </td>
-                          <td class="px-6 py-4">
-                            <button
-                              onClick={() => handleScrape(shelter.id)}
-                              disabled={scraping() === shelter.id || syncState(shelter) === "syncing"}
-                              class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
-                            >
-                              {scraping() === shelter.id
-                                ? "Scraping..."
-                                : syncState(shelter) === "idle"
-                                  ? "Scrape Now"
-                                  : syncState(shelter) === "stalled"
-                                    ? "Retry"
-                                    : "In Progress"}
-                            </button>
-                          </td>
-                        </tr>
+                            {scraping()[shelter.id] ? "Working..." : isStalled(shelter) ? "Retry Sync" : "Force Sync"}
+                          </button>
+                        </div>
                       )}
                     </For>
-                  </tbody>
-                </table>
+                  </Show>
+                </div>
+                <a href="/admin/shelters" class="text-sm text-blue-600 hover:underline font-medium inline-block">View all shelters →</a>
+              </div>
+
+              {/* Activity / Jobs */}
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <h2 class="text-xl font-bold flex items-center gap-2">
+                    <ActivityIcon class="text-blue-500" size={20} />
+                    Recent Activity
+                  </h2>
+                  <a href="/admin/queue" class="text-sm text-blue-600 hover:underline font-medium">View Queue →</a>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 divide-y overflow-hidden">
+                  <Show when={jobs()} keyed>
+                    {(jobsData) => (
+                      <For each={jobsData.jobs.slice(0, 8)}>
+                        {(job) => (
+                          <div class="p-4 flex items-center justify-between hover:bg-gray-50">
+                            <div class="min-w-0">
+                              <div class="font-medium truncate">{job.shelterName}</div>
+                              <div class="text-xs text-gray-500 flex items-center gap-1">
+                                {formatRelativeTime(job.finishedAt ?? job.startedAt)}
+                                <span class="text-gray-300">•</span>
+                                <span class={
+                                  job.status === "running" ? "text-blue-600" :
+                                  job.status === "error" ? "text-red-600" : "text-green-600"
+                                }>
+                                  {job.status === "running" ? "Running" :
+                                   job.status === "error" ? "Failed" : 
+                                   `Success (+${job.dogsAdded} ~${job.dogsUpdated} -${job.dogsRemoved})`}
+                                </span>
+                              </div>
+                            </div>
+                            <Show when={job.status === "running"}>
+                              <LoaderCircle size={16} class="animate-spin text-blue-600" />
+                            </Show>
+                          </div>
+                        )}
+                      </For>
+                    )}
+                  </Show>
+                </div>
               </div>
             </div>
 
@@ -221,5 +285,26 @@ export default function AdminDashboard(props: Props) {
         )}
       </Show>
     </div>
+  )
+}
+
+function KPICard(props: { label: string; value: number; href: string; color: string; icon: any }) {
+  return (
+    <a href={props.href} class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all relative overflow-hidden group">
+      <div class="absolute right-[-8px] bottom-[-8px] opacity-10 group-hover:scale-110 transition-transform duration-300">
+        {props.icon}
+      </div>
+      <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1">{props.label}</h3>
+      <div class={`text-4xl font-black ${props.color}`}>{props.value}</div>
+      <div class="mt-4 flex items-center text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+        Click to view details <ExternalLink size={10} class="ml-1" />
+      </div>
+    </a>
+  )
+}
+
+function ActivityIcon(props: { size?: number; class?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={props.size ?? 24} height={props.size ?? 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class={props.class}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
   )
 }

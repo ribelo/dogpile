@@ -52,7 +52,7 @@ export default {
               insertCost
                 .bind(
                   crypto.randomUUID(),
-                  entry.createdAt.getTime(),
+                  Math.floor(entry.createdAt.getTime() / 1000),
                   entry.operation,
                   entry.model,
                   entry.inputTokens,
