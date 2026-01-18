@@ -65,29 +65,21 @@ Dog adoption aggregator that scrapes Polish shelters, enriches data with AI, and
 
 ## Prerequisites
 
-- [Nix](https://nixos.org/download.html) with flakes enabled
+- [Bun](https://bun.sh/) (runtime, package manager, test runner)
+- [Node.js](https://nodejs.org/) 22+
+- [Wrangler](https://developers.cloudflare.com/workers/wrangler/) (Cloudflare CLI)
 - Cloudflare account with Workers, D1, R2, Queues, Vectorize
 - OpenRouter API key
 
 ## Setup
 
-### 1. Enter Nix Shell
-
-**All commands must run inside `nix develop`:**
-
-```bash
-nix develop
-```
-
-This provides Bun, Node.js, Wrangler, and native library dependencies (sharp, vips).
-
-### 2. Install Dependencies
+### 1. Install Dependencies
 
 ```bash
 bun install
 ```
 
-### 3. Configure Environment Variables
+### 2. Configure Environment Variables
 
 Copy the example and fill in your keys:
 
@@ -97,7 +89,7 @@ cp .env.example apps/scraper-processor/.dev.vars
 cp .env.example apps/embedder/.dev.vars
 ```
 
-**Required variables:**
+**Required:**
 
 | Variable | Description |
 |----------|-------------|
@@ -122,7 +114,7 @@ PUBLIC_API_URL=http://localhost:8787
 PUBLIC_ADMIN_KEY=dev-admin-key-123
 ```
 
-### 4. Cloudflare Resources
+### 3. Cloudflare Resources
 
 Create these resources in your Cloudflare dashboard:
 
@@ -134,13 +126,13 @@ Create these resources in your Cloudflare dashboard:
 
 Update the IDs in `apps/*/wrangler.toml` files.
 
-### 5. Run Migrations
+### 4. Run Migrations
 
 ```bash
 bun run db:migrate
 ```
 
-### 6. Seed Shelters
+### 5. Seed Shelters
 
 ```bash
 bun run cli scrape seed
@@ -208,7 +200,7 @@ bun run cli photos clear      # Clear generated photos
 
 ## Local Development Workflow
 
-**Important**: Remote Cloudflare bindings are broken on NixOS. Use local mode with sync:
+**Important**: Remote Cloudflare bindings (`--remote` flag) are broken on NixOS. Use local mode with sync:
 
 ```bash
 # 1. Pull latest production data
