@@ -14,8 +14,8 @@ CREATE TABLE `__new_shelters` (
 	`phone` text,
 	`email` text,
 	`status` text DEFAULT 'active' NOT NULL,
-	`active` integer DEFAULT true NOT NULL,
-	`last_sync` integer
+	`last_sync` integer,
+	`active` integer DEFAULT true NOT NULL
 );
 --> statement-breakpoint
 INSERT INTO `__new_shelters` (
@@ -30,8 +30,8 @@ INSERT INTO `__new_shelters` (
 	`phone`,
 	`email`,
 	`status`,
-	`active`,
-	`last_sync`
+	`last_sync`,
+	`active`
 )
 SELECT
 	`id`,
@@ -45,8 +45,8 @@ SELECT
 	`phone`,
 	`email`,
 	`status`,
-	CASE WHEN `status` = 'inactive' THEN 0 ELSE 1 END,
-	`last_sync`
+	`last_sync`,
+	CASE WHEN `status` = 'inactive' THEN 0 ELSE 1 END
 FROM `shelters`;
 --> statement-breakpoint
 DROP TABLE `shelters`;

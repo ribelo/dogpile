@@ -16,7 +16,7 @@
     "typecheck": "bun run --filter '*' typecheck",
     "db:generate": "bun run --filter @dogpile/db generate",
     "db:migrate": "bun run --filter @dogpile/db migrate",
-    "cli": "bun run --filter @dogpile/cli start",
+    "cli": "bun run --env-file .env --filter @dogpile/cli start",
     "db:pull": "bun run cli db pull",
     "db:push": "bun run cli db push",
     "dev:workers": "wrangler d1 migrations apply dogpile-db --local --config apps/api/wrangler.toml --persist-to apps/api/.wrangler/state && wrangler dev -c apps/api/wrangler.toml -c apps/scraper-processor/wrangler.toml --persist-to apps/api/.wrangler/state --port 8787 --inspector-port 0",
@@ -28,7 +28,8 @@
     "@effect/language-service": "^0.64.0",
     "@types/bun": "^1.2.14",
     "puppeteer-core": "^24.34.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "wrangler": "^4.59.2"
   },
   "dependencies": {
     "sharp": "^0.34.5"

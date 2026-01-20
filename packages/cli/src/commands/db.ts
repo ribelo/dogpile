@@ -1,5 +1,5 @@
-import { Command } from "@effect/cli"
-import { Console, Effect } from "effect"
+import { Command, Options } from "@effect/cli"
+import { Console, Effect, Option } from "effect"
 import { execSync } from "node:child_process"
 import { writeFileSync, unlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -24,6 +24,8 @@ const findLocalDb = () => Effect.gen(function* () {
   }
   return dbPaths[0]
 })
+
+const limitOpt = Options.integer("limit").pipe(Options.optional)
 
 const escapeSQL = (val: unknown): string => {
   if (val === null || val === undefined) return "NULL"
@@ -79,7 +81,7 @@ const pullCommand = Command.make("pull", {}, () =>
   })
 )
 
-const pushCommand = Command.make("push", {}, () =>
+const pushCommand = Command.make("push", { limit: limitOpt }, ({ limit }) =>
   Effect.gen(function* () {
     yield* Console.log("Pushing data to remote D1...")
 
@@ -88,7 +90,9 @@ const pushCommand = Command.make("push", {}, () =>
 
     let sql = "PRAGMA foreign_keys = OFF;\n"
 
-    const shelters = db.query("SELECT * FROM shelters").all() as Record<string, unknown>[]
+    const queryLimit = Option.match(limit, { onNone: () => "", onSome: (n) => ` LIMIT ${n}` })
+
+    const shelters = db.query(`SELECT * FROM shelters${queryLimit}`).all() as Record<string, unknown>[]
     for (const s of shelters) {
       const cols = Object.keys(s)
       const vals = cols.map(c => escapeSQL(s[c]))
@@ -96,7 +100,7 @@ const pushCommand = Command.make("push", {}, () =>
       sql += `INSERT INTO shelters (${cols.join(", ")}) VALUES (${vals.join(", ")}) ON CONFLICT(id) DO UPDATE SET ${updates};\n`
     }
 
-    const dogs = db.query("SELECT * FROM dogs").all() as Record<string, unknown>[]
+    const dogs = db.query(`SELECT * FROM dogs${queryLimit}`).all() as Record<string, unknown>[]
     for (const d of dogs) {
       const cols = Object.keys(d)
       const vals = cols.map(c => escapeSQL(d[c]))

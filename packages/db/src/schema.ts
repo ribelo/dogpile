@@ -25,9 +25,9 @@ export const shelters = sqliteTable("shelters", {
   lng: real("lng"),
   phone: text("phone"),
   email: text("email"),
-  active: integer("active", { mode: "boolean" }).notNull().default(true),
   status: text("status", { enum: ["active", "inactive", "error"] }).notNull().default("active"),
   lastSync: integer("last_sync", { mode: "timestamp" }),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
 }, (table) => [
   index("shelters_slug_idx").on(table.slug),
   index("shelters_status_idx").on(table.status),
