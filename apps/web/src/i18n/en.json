@@ -31,6 +31,12 @@
     "male": "Male",
     "female": "Female",
     "startSniffing": "Start Sniffing",
+    "clear": "Clear",
+    "apply": "Show Results",
+    "puppy": "Puppy",
+    "young": "Young",
+    "adult": "Adult",
+    "senior": "Senior",
     "puppies": "Puppies",
     "small": "Small",
     "medium": "Medium",
@@ -41,6 +47,7 @@
     "high": "High"
   },
   "card": {
+    "year": "year",
     "years": "years",
     "months": "months",
     "male": "Male",
@@ -66,6 +73,11 @@
   "meta": {
     "siteTitle": "Dogpile - Find your dog",
     "siteDescription": "Dogs from Polish shelters in one place. Find your best friend."
+  },
+  "nav": {
+    "sniffAround": "Sniff Around",
+    "about": "About",
+    "myPile": "My Pile"
   },
   "dogDetail": {
     "backToList": "Back to the pile",

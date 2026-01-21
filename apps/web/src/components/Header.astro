@@ -1,0 +1,46 @@
+---
+import { t, type Language } from '../i18n'
+import LanguageSwitcher from './LanguageSwitcher'
+
+const lang = (Astro.currentLocale as Language) || 'pl'
+---
+
+<header class="sticky top-0 z-50 w-full bg-sys-paper-base/80 backdrop-blur-md border-b border-sys-paper-shadow py-4">
+  <div class="max-w-6xl mx-auto px-4 md:px-6 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2 no-underline group">
+      <div class="w-10 h-10 bg-sys-ink-primary rounded-xl flex items-center justify-center rotate-3 group-hover:rotate-0 transition-transform shadow-md shadow-sys-ink-primary/20">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-sys-heart-soft" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 14c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-5-4c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-3-3c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+        </svg>
+      </div>
+      <span class="font-title text-2xl font-black text-sys-ink-primary tracking-tight">dogpile</span>
+    </a>
+
+    <nav class="hidden md:flex items-center gap-8">
+      <a href="/#dogs" class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60 hover:text-sys-ink-primary transition-colors no-underline">
+        {t('nav.sniffAround', lang)}
+      </a>
+      <a href="/about" class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60 hover:text-sys-ink-primary transition-colors no-underline">
+        {t('nav.about', lang)}
+      </a>
+      <a href="/favorites" class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-sys-heart-core hover:opacity-80 transition-opacity no-underline">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 10-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        </svg>
+        {t('nav.myPile', lang)}
+      </a>
+      <div class="w-px h-4 bg-sys-paper-shadow mx-2"></div>
+      <LanguageSwitcher client:load />
+    </nav>
+
+    <!-- Mobile Menu Button (simplified for now) -->
+    <div class="flex md:hidden items-center gap-4">
+      <a href="/favorites" class="text-sys-heart-core" aria-label={t('nav.myPile', lang)}>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 10-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        </svg>
+      </a>
+      <LanguageSwitcher client:load />
+    </div>
+  </div>
+</header>

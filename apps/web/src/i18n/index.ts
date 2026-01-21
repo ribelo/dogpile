@@ -51,5 +51,5 @@ export function getAvailableLanguages(): Language[] {
 }
 
 export function getLanguageName(lang: Language): string {
-  return lang === 'pl' ? 'Polski' : 'English'
+  return lang.toUpperCase()
 }

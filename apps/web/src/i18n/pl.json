@@ -31,6 +31,12 @@
     "male": "Samiec",
     "female": "Samica",
     "startSniffing": "Zacznij niuchać",
+    "clear": "Wyczyść",
+    "apply": "Pokaż wyniki",
+    "puppy": "Szczeniak",
+    "young": "Młody",
+    "adult": "Dorosły",
+    "senior": "Senior",
     "puppies": "Szczeniaki",
     "small": "Małe",
     "medium": "Średnie",
@@ -41,6 +47,8 @@
     "high": "Wysoki"
   },
   "card": {
+    "year": "rok",
+    "years24": "lata",
     "years": "lat",
     "months": "miesięcy",
     "male": "Samiec",
@@ -66,6 +74,11 @@
   "meta": {
     "siteTitle": "Dogpile - Znajdź swojego psa",
     "siteDescription": "Psy z polskich schronisk w jednym miejscu. Znajdź swojego najlepszego przyjaciela."
+  },
+  "nav": {
+    "sniffAround": "Poniuchaj",
+    "about": "O projekcie",
+    "myPile": "Moja Paka"
   },
   "dogDetail": {
     "backToList": "Wróć do listy",

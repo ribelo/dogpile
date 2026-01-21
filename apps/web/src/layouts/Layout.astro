@@ -1,4 +1,6 @@
 ---
+import Header from '../components/Header.astro'
+
 interface Props {
   title: string
   description?: string
@@ -25,7 +27,8 @@ const {
     <meta name="twitter:card" content="summary_large_image" />
     <title>{title} // Dogpile</title>
   </head>
-  <body class="min-h-screen">
+  <body class="min-h-screen bg-sys-paper-base">
+    <Header />
     <slot />
   </body>
 </html>

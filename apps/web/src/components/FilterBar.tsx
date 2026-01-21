@@ -100,7 +100,7 @@ export default function FilterBar(_props: FilterBarProps) {
           </div>
 
           <div class="space-y-2">
-            <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('card.sex')}</label>
+            <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('filters.sex')}</label>
             <div class="relative">
               <select 
                 value={sex()}
@@ -108,8 +108,8 @@ export default function FilterBar(_props: FilterBarProps) {
                 class="w-full filter-input px-4 py-3 font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10"
               >
                 <option value="">{t('filters.doesntMatter')}</option>
-                <option value="male">{t('card.male')}</option>
-                <option value="female">{t('card.female')}</option>
+                <option value="male">{t('filters.male')}</option>
+                <option value="female">{t('filters.female')}</option>
               </select>
               <div class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-sys-ink-primary/50">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

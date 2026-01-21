@@ -12,12 +12,17 @@ const { id } = Astro.params
 const lang = (Astro.currentLocale as Language) || 'pl'
 
 function formatAge(months: number, lang: Language): string {
-  const years = Math.round(months / 12)
-  if (lang === 'en') return `~${years} year${years !== 1 ? 's' : ''}`
-  // Polish: 1 rok, 2-4 lata, 5+ lat
-  if (years === 1) return '~1 rok'
-  if (years >= 2 && years <= 4) return `~${years} lata`
-  return `~${years} lat`
+  const years = Math.floor(months / 12)
+  if (months < 12) return `${months} ${t('card.months', lang)}`
+  
+  if (years === 1) return `~1 ${t('card.year', lang)}`
+  
+  if (lang === 'pl') {
+    if (years >= 2 && years <= 4) return `~${years} ${t('card.years24', lang)}`
+    return `~${years} ${t('card.years', lang)}`
+  }
+  
+  return `~${years} ${t('card.years', lang)}`
 }
 
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787'

@@ -193,18 +193,23 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
 
               {/* Age */}
               <div class="space-y-3">
-                <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">Age</label>
+                <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">{t('filters.age')}</label>
                 <div class="grid grid-cols-2 gap-3">
-                  {["Puppy", "Young", "Adult", "Senior"].map((a) => (
+                  {[
+                    { key: "Puppy", label: t('filters.puppy') },
+                    { key: "Young", label: t('filters.young') },
+                    { key: "Adult", label: t('filters.adult') },
+                    { key: "Senior", label: t('filters.senior') }
+                  ].map((a) => (
                     <button
-                      onClick={() => setAge(a === age() ? "" : a)}
+                      onClick={() => setAge(a.key === age() ? "" : a.key)}
                       class={`py-3 px-4 rounded-xl border-2 font-bold transition-all ${
-                        age() === a 
+                        age() === a.key 
                           ? "bg-sys-heart-core text-white border-sys-heart-core shadow-md scale-[1.02]" 
                           : "bg-white border-sys-paper-shadow text-sys-ink-primary hover:border-sys-heart-core/50"
                       }`}
                     >
-                      {a}
+                      {a.label}
                     </button>
                   ))}
                 </div>
@@ -212,18 +217,22 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
 
               {/* Energy */}
               <div class="space-y-3">
-                <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">Energy Level</label>
+                <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">{t('filters.energy')}</label>
                 <div class="flex gap-2">
-                  {["Low", "Medium", "High"].map((e) => (
+                  {[
+                    { key: "Low", label: t('filters.low') },
+                    { key: "Medium", label: t('filters.medium') },
+                    { key: "High", label: t('filters.high') }
+                  ].map((e) => (
                     <button
-                      onClick={() => setEnergy(e === energy() ? "" : e)}
+                      onClick={() => setEnergy(e.key === energy() ? "" : e.key)}
                       class={`flex-1 py-3 px-2 rounded-xl border-2 font-bold transition-all ${
-                        energy() === e
+                        energy() === e.key
                           ? "bg-sys-heart-core text-white border-sys-heart-core shadow-md" 
                           : "bg-white border-sys-paper-shadow text-sys-ink-primary hover:border-sys-heart-core/50"
                       }`}
                     >
-                      {e}
+                      {e.label}
                     </button>
                   ))}
                 </div>
@@ -239,13 +248,13 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
                 onClick={handleClear}
                 class="btn-secondary flex-1 justify-center"
               >
-                Clear
+                {t('filters.clear')}
               </button>
               <button 
                 onClick={handleApply}
                 class="btn-primary flex-1 justify-center shadow-lg shadow-sys-heart-core/20"
               >
-                Show Results
+                {t('filters.apply')}
               </button>
             </div>
           </div>

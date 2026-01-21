@@ -1,18 +1,28 @@
 import { createSignal } from "solid-js"
 import type { Dog } from "./types"
 import ImageSlider from "./ImageSlider"
+import { t } from "../i18n"
 
 interface Props {
   dog: Dog
 }
 
-// TODO: Add client-side i18n support for DogCard
 function formatAge(ageEstimate: Dog["ageEstimate"]): string | null {
   if (!ageEstimate) return null
   const months = ageEstimate.months
-  if (months < 12) return `${months} mo`
+  if (months < 12) return `${months} ${t('card.months')}`
+  
   const years = Math.floor(months / 12)
-  return `${years} yr${years > 1 ? "s" : ""}`
+  if (years === 1) return `1 ${t('card.year')}`
+  
+  // Polish pluralization
+  const lang = typeof document !== 'undefined' ? document.documentElement.lang : 'pl'
+  if (lang === 'pl' || (!lang && typeof window !== 'undefined')) {
+    if (years >= 2 && years <= 4) return `${years} ${t('card.years24')}`
+    return `${years} ${t('card.years')}`
+  }
+  
+  return `${years} ${t('card.years')}`
 }
 
 export default function DogCard(props: Props) {
@@ -35,8 +45,8 @@ export default function DogCard(props: Props) {
 
   const age = () => formatAge(props.dog.ageEstimate)
   const sex = () => {
-    if (props.dog.sex === "male") return "Male"
-    if (props.dog.sex === "female") return "Female"
+    if (props.dog.sex === "male") return t('card.male')
+    if (props.dog.sex === "female") return t('card.female')
     return null
   }
 
