@@ -34,16 +34,17 @@ export default function FilterBar(_props: FilterBarProps) {
   }
 
   return (
-    <section class={`sticky top-0 z-40 transition-all duration-300 w-full ${isStuck() ? 'bg-sys-paper-base/95 backdrop-blur-sm shadow-lg py-4' : 'py-8 md:py-12'}`}>
+    <section id="filter-section" class={`sticky top-0 z-40 transition-all duration-300 w-full ${isStuck() ? 'bg-sys-paper-base/95 backdrop-blur-sm shadow-lg py-4' : 'py-8 md:py-12'}`}>
       <div class={`max-w-6xl mx-auto px-4 transition-all duration-300 ${isStuck() ? '' : 'mb-12 md:mb-24'}`}>
         <div class={`bg-sys-paper-card paper-edge shadow-sm border border-sys-paper-shadow transition-all duration-300 ${isStuck() ? 'p-4 md:p-6' : 'p-6 md:p-8'}`}>
           <div class={`flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 transition-all duration-300 ${isStuck() ? 'mb-4' : 'mb-6'}`}>
             <div class="flex items-end gap-4">
-              <h2 class={`font-title font-bold text-sys-ink-primary transition-all duration-300 ${isStuck() ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'}`}>{t('filters.title')}</h2>
+              <h2 id="filter-section-title" class={`font-title font-bold text-sys-ink-primary transition-all duration-300 ${isStuck() ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl'}`}>{t('filters.title')}</h2>
               {!isStuck() && <p class="hidden sm:block text-sys-ink-primary/60 pb-1 italic font-bold">{t('filters.subtitle')}</p>}
             </div>
           </div>
           <button 
+            id="mobile-filter-open-button"
             onClick={() => setIsMobileSheetOpen(true)}
             class="sm:hidden w-full flex items-center justify-between px-4 py-3 bg-sys-paper-base border-2 border-sys-paper-shadow rounded-xl font-bold text-sys-ink-primary"
             type="button"
@@ -61,6 +62,7 @@ export default function FilterBar(_props: FilterBarProps) {
             <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('filters.location')}</label>
             <div class="relative">
               <select 
+                id="filter-location-select"
                 value={city()}
                 onInput={(e) => setCity(e.currentTarget.value)}
                 class="w-full filter-input px-4 py-3 font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10"
@@ -82,6 +84,7 @@ export default function FilterBar(_props: FilterBarProps) {
             <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('filters.size')}</label>
             <div class="relative">
               <select 
+                id="filter-size-select"
                 value={size()}
                 onInput={(e) => setSize(e.currentTarget.value)}
                 class="w-full filter-input px-4 py-3 font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10"
@@ -103,6 +106,7 @@ export default function FilterBar(_props: FilterBarProps) {
             <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('filters.sex')}</label>
             <div class="relative">
               <select 
+                id="filter-sex-select"
                 value={sex()}
                 onInput={(e) => setSex(e.currentTarget.value)}
                 class="w-full filter-input px-4 py-3 font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10"
@@ -120,7 +124,7 @@ export default function FilterBar(_props: FilterBarProps) {
           </div>
 
           <div class="flex items-end">
-            <button type="submit" class="w-full btn-primary">
+            <button id="filter-submit-button" type="submit" class="w-full btn-primary">
               {t('filters.startSniffing')}
             </button>
           </div>

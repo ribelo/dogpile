@@ -4,7 +4,8 @@
     "headline": "Twój nowy najlepszy przyjaciel już tu czeka.",
     "subheadline": "Psy z całego kraju w jednym miejscu. Znajdź tego jedynego.",
     "cta": "Poznaj psy",
-    "stats": "12 znalazło dom"
+    "stats": "12 znalazło dom",
+    "waitingIn": "Czeka w: {location}"
   },
   "search": {
     "placeholder": "Szukaj psa...",

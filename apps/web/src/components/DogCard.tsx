@@ -51,7 +51,7 @@ export default function DogCard(props: Props) {
   }
 
   return (
-    <article class="group card card-appear w-full h-full flex flex-col relative !p-0 overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:rotate-1 hover:shadow-xl">
+    <article id={`dog-card-${props.dog.id}`} class="group card card-appear w-full h-full flex flex-col relative !p-0 overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:rotate-1 hover:shadow-xl">
       {props.dog.urgent && (
         <div class="absolute top-3 left-3 tag-urgent rotate-[-5deg] z-20 shadow-md !bg-sys-heart-core !text-white px-3 py-1 font-bold rounded-sm">
           URGENT!
@@ -66,7 +66,7 @@ export default function DogCard(props: Props) {
           class="h-full w-full"
           size="sm"
         />
-        <a href={`/dogs/${props.dog.id}`} class="absolute inset-0 z-10">
+        <a id={`dog-card-link-${props.dog.id}`} href={`/dogs/${props.dog.id}`} class="absolute inset-0 z-10">
           <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none z-0" />
           <span class="sr-only">View details for {props.dog.name}</span>
         </a>
@@ -81,6 +81,7 @@ export default function DogCard(props: Props) {
         </div>
 
         <button
+          id={`dog-card-favorite-button-${props.dog.id}`}
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()

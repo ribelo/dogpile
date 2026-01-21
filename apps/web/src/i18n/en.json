@@ -4,7 +4,8 @@
     "headline": "The pile is <br /><span class=\"text-sys-heart-core italic\">waiting.</span>",
     "subheadline": "From the Baltic to the Tatras, thousands of good dogs are waiting for a human hand. We collect them all in one cozy place, so you can find the one that fits your life.",
     "cta": "Meet the Dogs",
-    "stats": "12 found homes today"
+    "stats": "12 found homes today",
+    "waitingIn": "Waiting in {location}"
   },
   "search": {
     "placeholder": "Search for a dog...",

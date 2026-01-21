@@ -325,7 +325,33 @@ const routes: Route[] = [
   },
   {
     method: "GET",
-   pattern: new URLPattern({ pathname: "/dogs/search" }),
+    pattern: new URLPattern({ pathname: "/dogs/random" }),
+    handler: Effect.fn("api.getRandomDog")(function* (_req, env) {
+      const db = drizzle(env.DB)
+      
+      const result = yield* Effect.tryPromise({
+        try: () => 
+          db.select()
+            .from(dogs)
+            .where(eq(dogs.status, "available"))
+            .orderBy(sql`RANDOM()`)
+            .limit(1)
+            .get(),
+        catch: (e) => new DatabaseError({ operation: "getRandomDog", cause: e })
+      })
+      
+      if (!result) {
+        return yield* json({ error: "No dogs found" }, 404)
+      }
+      
+      const { fingerprint, ...publicData } = result as any
+      return yield* json(publicData)
+    }),
+  },
+  {
+    method: "GET",
+    pattern: new URLPattern({ pathname: "/dogs/search" }),
+
    handler: Effect.fn("api.searchDogs")(function* (req, env) {
    const url = new URL(req.url)
    const query = url.searchParams.get("q")

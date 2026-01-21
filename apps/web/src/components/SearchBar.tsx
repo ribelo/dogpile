@@ -33,6 +33,7 @@ export default function SearchBar() {
     <div class="w-full max-w-2xl mx-auto mb-12">
       <form onSubmit={handleSearch} class="flex gap-2 mb-6">
         <input
+          id="main-search-input"
           type="text"
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
@@ -40,6 +41,7 @@ export default function SearchBar() {
           class="flex-1 px-4 py-3 border-2 border-sys-paper-shadow rounded-lg focus:border-sys-heart-core focus:outline-none"
         />
         <button 
+          id="main-search-submit-button"
           type="submit"
           disabled={loading()}
           class="px-6 py-3 bg-sys-ink-primary text-white font-bold rounded-lg hover:bg-sys-heart-core transition-colors disabled:opacity-50"

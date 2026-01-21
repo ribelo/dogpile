@@ -111,8 +111,9 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
 
             {/* Header */}
             <div class="px-6 py-4 flex items-center justify-between border-b border-sys-ink-primary/5 flex-shrink-0">
-              <h2 class="text-xl font-bold font-title text-sys-ink-primary">{t('filters.title')}</h2>
+              <h2 id="mobile-filter-sheet-title" class="text-xl font-bold font-title text-sys-ink-primary">{t('filters.title')}</h2>
               <button 
+                id="mobile-filter-close-button"
                 onClick={props.onClose}
                 class="p-2 hover:bg-sys-ink-primary/5 rounded-full transition-colors"
                 aria-label="Close"
@@ -131,6 +132,7 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
                 <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">{t('filters.location')}</label>
                 <div class="relative">
                   <select 
+                    id="mobile-filter-location-select"
                     value={city()}
                     onInput={(e) => setCity(e.currentTarget.value)}
                     class="filter-input w-full appearance-none"
@@ -153,6 +155,7 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
                 <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">{t('filters.sex')}</label>
                 <div class="relative">
                   <select 
+                    id="mobile-filter-sex-select"
                     value={sex()}
                     onInput={(e) => setSex(e.currentTarget.value)}
                     class="filter-input w-full appearance-none"
@@ -174,6 +177,7 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
                 <label class="text-sm font-bold uppercase tracking-wider text-sys-ink-primary/60">{t('filters.size')}</label>
                 <div class="relative">
                   <select 
+                    id="mobile-filter-size-select"
                     value={size()}
                     onInput={(e) => setSize(e.currentTarget.value)}
                     class="filter-input w-full appearance-none"
@@ -202,6 +206,7 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
                     { key: "Senior", label: t('filters.senior') }
                   ].map((a) => (
                     <button
+                      id={`mobile-filter-age-${a.key.toLowerCase()}`}
                       onClick={() => setAge(a.key === age() ? "" : a.key)}
                       class={`py-3 px-4 rounded-xl border-2 font-bold transition-all ${
                         age() === a.key 
@@ -225,6 +230,7 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
                     { key: "High", label: t('filters.high') }
                   ].map((e) => (
                     <button
+                      id={`mobile-filter-energy-${e.key.toLowerCase()}`}
                       onClick={() => setEnergy(e.key === energy() ? "" : e.key)}
                       class={`flex-1 py-3 px-2 rounded-xl border-2 font-bold transition-all ${
                         energy() === e.key
@@ -245,12 +251,14 @@ export default function MobileFilterSheet(props: MobileFilterSheetProps) {
             {/* Footer */}
             <div class="p-6 border-t border-sys-ink-primary/5 bg-sys-paper-card flex-shrink-0 flex gap-4">
               <button 
+                id="mobile-filter-clear-button"
                 onClick={handleClear}
                 class="btn-secondary flex-1 justify-center"
               >
                 {t('filters.clear')}
               </button>
               <button 
+                id="mobile-filter-apply-button"
                 onClick={handleApply}
                 class="btn-primary flex-1 justify-center shadow-lg shadow-sys-heart-core/20"
               >

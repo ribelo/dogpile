@@ -14,7 +14,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
   <div class="grain-overlay min-h-screen">
     <div class="pt-12 md:pt-20">
       <div class="max-w-6xl mx-auto px-4 md:px-6">
-        <a href="/" class="link-arrow mb-8 inline-flex">
+        <a id="back-to-home-link" href="/" class="link-arrow mb-8 inline-flex">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
           {t('dogDetail.backToList', lang)}
         </a>
@@ -28,7 +28,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
       <SearchBar client:load />
     </div>
     <FilterBar client:load />
-    <main class="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-12 lg:py-16">
+    <main id="all-dogs-page" class="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-12 lg:py-16">
       <DogGrid client:load apiUrl={API_URL} />
     </main>
     <Footer />

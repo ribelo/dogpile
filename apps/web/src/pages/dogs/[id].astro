@@ -40,9 +40,9 @@ const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0])
 ---
 
 <Layout title={`${dog.name} - Dogpile`} image={ogImage}>
-  <main class="grain-overlay min-h-screen pt-12 pb-24 px-6">
+  <main id="dog-detail-page" class="grain-overlay min-h-screen pt-12 pb-24 px-6">
     <div class={`max-w-4xl mx-auto ${dog.isRemoved ? 'opacity-60' : ''}`}>
-      <a href="/" class="link-arrow mb-12">
+      <a id="back-to-list-link" href="/" class="link-arrow mb-12">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
         {t('dogDetail.backToList', lang)}
       </a>
@@ -131,7 +131,7 @@ const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0])
             </div>
 
             {!dog.isRemoved && (
-              <a href={dog.sourceUrl} target="_blank" rel="noopener noreferrer" class="btn-primary w-full text-center block text-2xl lowercase">
+              <a id="contact-shelter-button" href={dog.sourceUrl} target="_blank" rel="noopener noreferrer" class="btn-primary w-full text-center block text-2xl lowercase">
                 {t('dogDetail.contact', lang)} {dog.name}
               </a>
             )}
