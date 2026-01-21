@@ -1,6 +1,7 @@
 import { createResource, createSignal, onMount, onCleanup, For, Show, Switch, Match } from "solid-js"
 import DogCard from "./DogCard"
 import type { Dog } from "./types"
+import { t } from "../i18n"
 
 async function fetchDogs({ apiUrl, filters }: { apiUrl: string, filters: DogFilters }): Promise<Dog[]> {
   const cleanUrl = apiUrl.replace(/\/$/, "")
@@ -10,6 +11,7 @@ async function fetchDogs({ apiUrl, filters }: { apiUrl: string, filters: DogFilt
   if (filters.city) url.searchParams.set("city", filters.city)
   if (filters.size) url.searchParams.set("size", filters.size)
   if (filters.sex) url.searchParams.set("sex", filters.sex)
+  if (filters.ids && filters.ids.length > 0) url.searchParams.set("ids", filters.ids.join(","))
 
   const response = await fetch(url.toString())
   if (!response.ok) {
@@ -28,6 +30,7 @@ export interface DogFilters {
   city?: string
   size?: string
   sex?: string
+  ids?: string[]
 }
 
 const SkeletonCard = () => (
@@ -49,16 +52,22 @@ const SkeletonCard = () => (
   </article>
 )
 
-const EmptyState = () => (
+const EmptyState = (props: { isFavorites?: boolean }) => (
   <div class="col-span-full flex flex-col items-center justify-center py-24 text-center">
     <div class="text-sys-ink-primary/20 mb-6">
       <svg class="w-32 h-32" fill="currentColor" viewBox="0 0 24 24">
         <path d="M2.8 8c-1 2.3.3 4.9 2.7 5.9 2.4 1 5.1-.1 6-2.4.9-2.3-.4-4.9-2.8-5.9-2.3-1-5.1.1-6 2.4zm13.2-5c-1.9 1.7-1.7 4.7.3 6.3s4.8 1.4 6.6-.3c1.9-1.7 1.7-4.7-.3-6.3s-4.8-1.4-6.6.3zm-7.5-.5c-1.8-1.8-4.8-1.7-6.5.3-1.7 2-1.4 5 .3 6.8s4.8 1.7 6.5-.3c1.8-2 1.5-5-.3-6.8zm12.5 5.7c-2.4-.8-5 .5-5.8 2.9-.8 2.4.5 4.9 2.9 5.7 2.4.8 5-.5 5.8-2.9.8-2.4-.5-4.9-2.9-5.7zm-8.9 3.4c-3.4.3-6.1 3.2-6.1 6.6v.4c0 2.2 1.8 3.9 4 3.9h4c2.2 0 4-1.8 4-4v-.4c0-3.4-2.8-6.3-6.2-6.5z" />
       </svg>
     </div>
-    <h3 class="font-title text-2xl font-bold text-sys-ink-primary mb-2">It's empty here...</h3>
-    <p class="text-sys-ink-primary/60 mb-8 text-lg">Maybe try changing the criteria?</p>
-    <a href="/dogs" class="btn-secondary inline-block">Show all dogs</a>
+    <h3 class="font-title text-2xl font-bold text-sys-ink-primary mb-2">
+      {props.isFavorites ? t('empty.favoritesTitle') : t('empty.title')}
+    </h3>
+    <p class="text-sys-ink-primary/60 mb-8 text-lg">
+      {props.isFavorites ? t('empty.favoritesSubtitle') : t('empty.subtitle')}
+    </p>
+    <a href="/dogs" class="btn-secondary inline-block">
+      {t('empty.showAll')}
+    </a>
   </div>
 )
 
@@ -95,7 +104,7 @@ export default function DogGrid(props: DogGridProps) {
         </Match>
 
         <Match when={dogs()}>
-          <Show when={dogs()!.length > 0} fallback={<EmptyState />}>
+          <Show when={dogs()!.length > 0} fallback={<EmptyState isFavorites={!!props.filters?.ids} />}>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 card-grid">
               <For each={dogs()}>
                 {(dog) => <DogCard dog={dog} />}

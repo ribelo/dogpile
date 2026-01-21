@@ -279,6 +279,7 @@ const routes: Route[] = [
       const city = url.searchParams.get("city")
       const sex = url.searchParams.get("sex")
       const size = url.searchParams.get("size")
+      const idsParam = url.searchParams.get("ids")
 
       const filters: SQL[] = []
 
@@ -288,6 +289,13 @@ const routes: Route[] = [
       }
       
       filters.push(eq(dogs.status, "available"))
+
+      if (idsParam) {
+        const ids = idsParam.split(",").filter(id => id.trim().length > 0)
+        if (ids.length > 0) {
+          filters.push(inArray(dogs.id, ids))
+        }
+      }
 
       if (city) {
         filters.push(sql`lower(${dogs.locationCity}) = lower(${city})`)

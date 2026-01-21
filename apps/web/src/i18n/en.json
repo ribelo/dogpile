@@ -60,6 +60,8 @@
   "empty": {
     "title": "It's empty here...",
     "subtitle": "Maybe try changing the criteria?",
+    "favoritesTitle": "Your pile is empty",
+    "favoritesSubtitle": "Sniff around and add some dogs to your favorites!",
     "showAll": "Show all dogs"
   },
   "footer": {

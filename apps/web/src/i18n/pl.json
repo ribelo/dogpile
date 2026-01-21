@@ -61,6 +61,8 @@
   "empty": {
     "title": "Pusto tu...",
     "subtitle": "Może spróbuj zmienić kryteria?",
+    "favoritesTitle": "Twoja paka jest pusta",
+    "favoritesSubtitle": "Poniuchaj trochę i dodaj jakieś psy do ulubionych!",
     "showAll": "Pokaż wszystkie psy"
   },
   "footer": {
