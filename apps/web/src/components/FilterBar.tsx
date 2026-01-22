@@ -26,7 +26,7 @@ export default function FilterBar(_props: FilterBarProps) {
 
   return (
     <section id="filter-section" class="w-full pt-2 md:pt-3">
-      <div class="max-w-6xl mx-auto px-4 mb-12 md:mb-24">
+      <div class="max-w-6xl mx-auto px-4 mb-2">
         <form onSubmit={handleSearch} class="hidden sm:grid grid-cols-4 gap-4">
           <div class="space-y-2">
             <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('filters.location')}</label>
