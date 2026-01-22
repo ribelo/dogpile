@@ -1,8 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro'
 import Footer from '../../components/Footer.astro'
-import ImageSlider from '../../components/ImageSlider'
-import Lightbox from '../../components/Lightbox'
+import DogDetailGallery from '../../components/DogDetailGallery'
 import { getPhotoUrl } from '../../utils/photo-url'
 import { t, type Language } from '../../i18n'
 
@@ -40,13 +39,6 @@ const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0])
   : undefined
 ---
 
-<script>
-  import { createSignal } from 'solid-js'
-
-  const [isLightboxOpen, setIsLightboxOpen] = createSignal(false)
-  const [lightboxIndex, setLightboxIndex] = createSignal(0)
-</script>
-
 <Layout title={`${dog.name} - Dogpile`} image={ogImage}>
   <main id="dog-detail-page" class="grain-overlay min-h-screen pt-12 pb-24 px-6">
     <div class={`max-w-4xl mx-auto ${dog.isRemoved ? 'opacity-60' : ''}`}>
@@ -67,32 +59,13 @@ const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0])
           <!-- Photo Gallery -->
           <div class="lg:col-span-7">
             <div class="polaroid rotate-1 hover:rotate-0 transition-transform">
-              <!-- Aspect ratio 4/5 is intentional for polaroid aesthetic -->
-              <ImageSlider
+              <DogDetailGallery
                 client:load
                 photos={dog.photos || []}
                 photosGenerated={dog.photosGenerated || []}
                 alt={dog.name}
-                class="w-full aspect-[4/5] rounded-sm"
-                autoplay={true}
-                interval={4000}
-                loading="eager"
-                enableLightbox={true}
-                onOpenLightbox={(idx) => {
-                  setLightboxIndex(idx)
-                  setIsLightboxOpen(true)
-                }}
               />
             </div>
-            <Lightbox
-              client:load
-              isOpen={isLightboxOpen()}
-              onClose={() => setIsLightboxOpen(false)}
-              photos={dog.photos || []}
-              photosGenerated={dog.photosGenerated || []}
-              initialIndex={lightboxIndex()}
-              alt={dog.name}
-            />
           </div>
         </div>
 
