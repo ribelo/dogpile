@@ -603,7 +603,7 @@ const routes: Route[] = [
       const shelterMap = new Map<string, string>()
       if (shelterIds.length > 0) {
         const shelterData = yield* Effect.tryPromise({
-          try: () => db.select({ id: shelters.id, name: shelters.name }).from(shelters).where(inArray(shelters.id, shelterIds)).all(),
+          try: () => db.select().from(shelters).where(inArray(shelters.id, shelterIds)).all(),
           catch: (e) => new DatabaseError({ operation: "getShelters", cause: e })
         })
         for (const s of shelterData) shelterMap.set(s.id, s.name)
