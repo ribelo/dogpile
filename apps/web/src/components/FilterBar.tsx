@@ -1,4 +1,4 @@
-import { createSignal, For, createEffect, onCleanup } from "solid-js"
+import { createSignal, For } from "solid-js"
 import { t } from "../i18n"
 import type { DogFilters } from "./DogGrid"
 import MobileFilterSheet from "./MobileFilterSheet"
@@ -13,15 +13,6 @@ export default function FilterBar(_props: FilterBarProps) {
   const [size, setSize] = createSignal("")
   const [sex, setSex] = createSignal("")
   const [isMobileSheetOpen, setIsMobileSheetOpen] = createSignal(false)
-  const [isStuck, setIsStuck] = createSignal(false)
-
-  createEffect(() => {
-    const handleScroll = () => {
-      setIsStuck(window.scrollY > 200)
-    }
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    onCleanup(() => window.removeEventListener('scroll', handleScroll))
-  })
 
   const handleSearch = (e: Event) => {
     e.preventDefault()
@@ -34,17 +25,17 @@ export default function FilterBar(_props: FilterBarProps) {
   }
 
   return (
-    <section id="filter-section" class={`sticky top-0 z-40 transition-all duration-300 w-full ${isStuck() ? 'bg-sys-paper-base/95 backdrop-blur-sm shadow-lg py-3' : 'pt-2 md:pt-3'}`}>
-      <div class={`max-w-6xl mx-auto px-4 transition-all duration-300 ${isStuck() ? '' : 'mb-12 md:mb-24'}`}>
-        <form onSubmit={handleSearch} class={`hidden sm:grid grid-cols-4 transition-all duration-300 ${isStuck() ? 'gap-2' : 'gap-4'}`}>
-          <div class={`space-y-2 ${isStuck() ? '' : 'space-y-2'}`}>
-            <label class={`font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50 ${isStuck() ? 'hidden' : ''}`}>{t('filters.location')}</label>
+    <section id="filter-section" class="w-full pt-2 md:pt-3">
+      <div class="max-w-6xl mx-auto px-4 mb-12 md:mb-24">
+        <form onSubmit={handleSearch} class="hidden sm:grid grid-cols-4 gap-4">
+          <div class="space-y-2">
+            <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('filters.location')}</label>
             <div class="relative">
-              <select 
+              <select
                 id="filter-location-select"
                 value={city()}
                 onInput={(e) => setCity(e.currentTarget.value)}
-                class={`w-full filter-input font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 transition-all duration-300 ${isStuck() ? 'px-3 py-2 text-sm' : 'px-4 py-3'}`}
+                class="w-full filter-input font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 px-4 py-3"
               >
                 <option value="">{t('filters.anywhere')}</option>
                 <For each={CITIES}>
@@ -59,14 +50,14 @@ export default function FilterBar(_props: FilterBarProps) {
             </div>
           </div>
 
-          <div class={`space-y-2 ${isStuck() ? '' : 'space-y-2'}`}>
-            <label class={`font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50 ${isStuck() ? 'hidden' : ''}`}>{t('filters.size')}</label>
+          <div class="space-y-2">
+            <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('filters.size')}</label>
             <div class="relative">
-              <select 
+              <select
                 id="filter-size-select"
                 value={size()}
                 onInput={(e) => setSize(e.currentTarget.value)}
-                class={`w-full filter-input font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 transition-all duration-300 ${isStuck() ? 'px-3 py-2 text-sm' : 'px-4 py-3'}`}
+                class="w-full filter-input font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 px-4 py-3"
               >
                 <option value="">{t('filters.doesntMatter')}</option>
                 <option value="small">{t('filters.pocketSized')}</option>
@@ -81,14 +72,14 @@ export default function FilterBar(_props: FilterBarProps) {
             </div>
           </div>
 
-          <div class={`space-y-2 ${isStuck() ? '' : 'space-y-2'}`}>
-            <label class={`font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50 ${isStuck() ? 'hidden' : ''}`}>{t('filters.sex')}</label>
+          <div class="space-y-2">
+            <label class="font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50">{t('filters.sex')}</label>
             <div class="relative">
-              <select 
+              <select
                 id="filter-sex-select"
                 value={sex()}
                 onInput={(e) => setSex(e.currentTarget.value)}
-                class={`w-full filter-input font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 transition-all duration-300 ${isStuck() ? 'px-3 py-2 text-sm' : 'px-4 py-3'}`}
+                class="w-full filter-input font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 px-4 py-3"
               >
                 <option value="">{t('filters.doesntMatter')}</option>
                 <option value="male">{t('filters.male')}</option>
@@ -103,16 +94,16 @@ export default function FilterBar(_props: FilterBarProps) {
           </div>
 
           <div class="flex items-end">
-            <button id="filter-submit-button" type="submit" class={`w-full btn-primary transition-all duration-300 ${isStuck() ? 'px-4 py-2 text-sm' : ''}`}>
-              {isStuck() ? t('filters.filter') : t('filters.startSniffing')}
+            <button id="filter-submit-button" type="submit" class="w-full btn-primary">
+              {t('filters.startSniffing')}
             </button>
           </div>
         </form>
       </div>
 
-      <MobileFilterSheet 
-        isOpen={isMobileSheetOpen()} 
-        onClose={() => setIsMobileSheetOpen(false)} 
+      <MobileFilterSheet
+        isOpen={isMobileSheetOpen()}
+        onClose={() => setIsMobileSheetOpen(false)}
       />
     </section>
   )
