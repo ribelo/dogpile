@@ -18,10 +18,9 @@ export default function ImageSlider(props: Props) {
   const [index, setIndex] = createSignal(0)
   const [isPaused, setIsPaused] = createSignal(false)
   const size = () => props.size || "lg"
-  
-  // AI-generated photos first, then original
+
   const allPhotos = () => [...(props.photosGenerated || []), ...(props.photos || [])]
-  
+
   const currentPhoto = () => allPhotos()[index()]
   const currentSrc = () => currentPhoto() ? getPhotoUrl(currentPhoto(), size()) : '/placeholder-dog.jpg'
   const currentSrcSet = () => currentPhoto() ? getPhotoSrcSet(currentPhoto()) : ""
@@ -33,7 +32,6 @@ export default function ImageSlider(props: Props) {
 
     if (photos.length <= 1 || !photos[nextIdx]) return
 
-    // Prefetch next image
     const nextSrc = getPhotoUrl(photos[nextIdx], size())
     const link = document.createElement('link')
     link.rel = 'prefetch'
@@ -46,16 +44,6 @@ export default function ImageSlider(props: Props) {
         link.parentNode.removeChild(link)
       }
     })
-  })
-
-  createEffect(() => {
-    if (!props.autoplay || isPaused() || allPhotos().length <= 1) return
-
-    const timer = setInterval(() => {
-      setIndex((i) => (i + 1) % allPhotos().length)
-    }, props.interval || 5000)
-
-    onCleanup(() => clearInterval(timer))
   })
 
   const next = (e: Event) => {

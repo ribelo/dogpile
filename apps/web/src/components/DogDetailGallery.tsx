@@ -19,9 +19,6 @@ export default function DogDetailGallery(props: DogDetailGalleryProps) {
         photosGenerated={props.photosGenerated}
         alt={props.alt}
         class="w-full aspect-[4/5] rounded-sm"
-        autoplay={true}
-        interval={4000}
-        loading="eager"
         enableLightbox={true}
         onOpenLightbox={(idx) => {
           setLightboxIndex(idx)
