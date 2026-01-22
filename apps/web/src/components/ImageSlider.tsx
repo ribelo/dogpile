@@ -76,40 +76,21 @@ export default function ImageSlider(props: Props) {
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      <Show when={props.enableLightbox}>
-        <div
-          class="cursor-pointer"
-          onClick={() => props.onOpenLightbox?.(index())}
-        >
-          <img
-            src={currentSrc()}
-            srcset={currentSrcSet() || undefined}
-            sizes={currentSrcSet() ? "(max-width: 640px) 100vw, 800px" : undefined}
-            width={size() === "sm" ? 400 : 1200}
-            height={size() === "sm" ? 300 : 900}
-            alt={props.alt}
-            class="nostalgia-img w-full h-full object-cover transition-opacity duration-300 hover:scale-105"
-            fetchpriority={props.loading === "eager" ? "high" : "auto"}
-            decoding="async"
-            loading={props.loading || "lazy"}
-          />
-        </div>
-      </Show>
-
-      <Show when={!props.enableLightbox}>
-        <img
-          src={currentSrc()}
-          srcset={currentSrcSet() || undefined}
-          sizes={currentSrcSet() ? "(max-width: 640px) 100vw, 800px" : undefined}
-          width={size() === "sm" ? 400 : 1200}
-          height={size() === "sm" ? 300 : 900}
-          alt={props.alt}
-          class="nostalgia-img w-full h-full object-cover transition-opacity duration-300"
-          fetchpriority={props.loading === "eager" ? "high" : "auto"}
-          decoding="async"
-          loading={props.loading || "lazy"}
-        />
-      </Show>
+      <img
+        src={currentSrc()}
+        srcset={currentSrcSet() || undefined}
+        sizes={currentSrcSet() ? "(max-width: 640px) 100vw, 800px" : undefined}
+        width={size() === "sm" ? 400 : 1200}
+        height={size() === "sm" ? 300 : 900}
+        alt={props.alt}
+        class={`nostalgia-img w-full h-full object-cover transition-opacity duration-300 ${
+          props.enableLightbox ? "cursor-pointer hover:scale-105" : ""
+        }`}
+        fetchpriority={props.loading === "eager" ? "high" : "auto"}
+        decoding="async"
+        loading={props.loading || "lazy"}
+        onClick={() => props.enableLightbox && props.onOpenLightbox?.(index())}
+      />
 
      {/* Controls (only show if multiple photos) */}
      <Show when={allPhotos().length > 1}>
