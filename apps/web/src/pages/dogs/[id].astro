@@ -127,7 +127,7 @@ const ogImage = (dog.photosGenerated?.[0] || dog.photos?.[0])
 
             {!dog.isRemoved && (
               <a id="contact-shelter-button" href={dog.sourceUrl} target="_blank" rel="noopener noreferrer" class="btn-primary w-full text-center block text-2xl lowercase">
-                {t('dogDetail.contact', lang)} {dog.name}
+                {t('dogDetail.contactShelter', lang)} {dog.shelterName ?? dog.name}
               </a>
             )}
           </div>
