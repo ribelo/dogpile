@@ -36,23 +36,6 @@ export default function FilterBar(_props: FilterBarProps) {
   return (
     <section id="filter-section" class={`sticky top-0 z-40 transition-all duration-300 w-full ${isStuck() ? 'bg-sys-paper-base/95 backdrop-blur-sm shadow-lg py-3' : 'py-8 md:py-12'}`}>
       <div class={`max-w-6xl mx-auto px-4 transition-all duration-300 ${isStuck() ? '' : 'mb-12 md:mb-24'}`}>
-        {!isStuck() && (
-          <div class="bg-sys-paper-card paper-edge shadow-sm border border-sys-paper-shadow p-6 md:p-8">
-            <button 
-              id="mobile-filter-open-button"
-              onClick={() => setIsMobileSheetOpen(true)}
-              class="sm:hidden w-full flex items-center justify-between px-4 py-3 bg-sys-paper-base border-2 border-sys-paper-shadow rounded-xl font-bold text-sys-ink-primary"
-              type="button"
-            >
-              <span class="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-                {t('filters.title')}
-              </span>
-              <span class="text-sys-heart-core text-sm">{city() || size() || sex() ? 'Active' : ''}</span>
-            </button>
-          </div>
-        )}
-
         <form onSubmit={handleSearch} class={`hidden sm:grid grid-cols-4 transition-all duration-300 ${isStuck() ? 'gap-2' : 'gap-4'}`}>
           <div class={`space-y-2 ${isStuck() ? '' : 'space-y-2'}`}>
             <label class={`font-bold text-sm uppercase tracking-wide text-sys-ink-primary/50 ${isStuck() ? 'hidden' : ''}`}>{t('filters.location')}</label>
