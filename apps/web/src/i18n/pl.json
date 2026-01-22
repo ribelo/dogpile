@@ -104,6 +104,9 @@
     "visitShelter": "Odwiedź stronę schroniska",
     "urgent": "PILNE!",
     "tagline": "Szuka miękkiego miejsca do lądowania",
-    "vibeCheck": "Vibe Check"
+    "vibeCheck": "Vibe Check",
+    "lightboxClose": "Zamknij pełnoekranowy widok",
+    "lightboxPrevious": "Poprzednie zdjęcie",
+    "lightboxNext": "Następne zdjęcie"
   }
 }

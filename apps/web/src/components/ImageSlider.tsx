@@ -10,6 +10,8 @@ interface Props {
   autoplay?: boolean
   interval?: number
   loading?: "lazy" | "eager"
+  enableLightbox?: boolean
+  onOpenLightbox?: (index: number) => void
 }
 
 export default function ImageSlider(props: Props) {
@@ -69,23 +71,30 @@ export default function ImageSlider(props: Props) {
   }
 
   return (
-    <div 
+    <div
       class={`relative group overflow-hidden ${props.class || ''}`}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
-      <img 
-        src={currentSrc()}
-        srcset={currentSrcSet() || undefined}
-        sizes={currentSrcSet() ? "(max-width: 640px) 100vw, 800px" : undefined}
-        width={size() === "sm" ? 400 : 1200}
-        height={size() === "sm" ? 300 : 900}
-        alt={props.alt}
-        class="nostalgia-img w-full h-full object-cover transition-opacity duration-300"
-        fetchpriority={props.loading === "eager" ? "high" : "auto"}
-        decoding="async"
-        loading={props.loading || "lazy"}
-      />
+      <div
+        class={props.enableLightbox ? "cursor-pointer" : ""}
+        onClick={() => props.enableLightbox && props.onOpenLightbox?.(index())}
+      >
+        <img
+          src={currentSrc()}
+          srcset={currentSrcSet() || undefined}
+          sizes={currentSrcSet() ? "(max-width: 640px) 100vw, 800px" : undefined}
+          width={size() === "sm" ? 400 : 1200}
+          height={size() === "sm" ? 300 : 900}
+          alt={props.alt}
+          class={`nostalgia-img w-full h-full object-cover transition-opacity duration-300 ${
+            props.enableLightbox ? "hover:scale-105" : ""
+          }`}
+          fetchpriority={props.loading === "eager" ? "high" : "auto"}
+          decoding="async"
+          loading={props.loading || "lazy"}
+        />
+      </div>
 
      {/* Controls (only show if multiple photos) */}
      <Show when={allPhotos().length > 1}>

@@ -103,6 +103,9 @@
     "visitShelter": "Visit shelter website",
     "urgent": "URGENT!",
     "tagline": "Looking for a soft place to land",
-    "vibeCheck": "Vibe Check"
+    "vibeCheck": "Vibe Check",
+    "lightboxClose": "Close full-screen view",
+    "lightboxPrevious": "Previous photo",
+    "lightboxNext": "Next photo"
   }
 }
