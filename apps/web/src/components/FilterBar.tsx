@@ -34,7 +34,7 @@ export default function FilterBar(_props: FilterBarProps) {
   }
 
   return (
-    <section id="filter-section" class={`sticky top-0 z-40 transition-all duration-300 w-full ${isStuck() ? 'bg-sys-paper-base/95 backdrop-blur-sm shadow-lg py-3' : 'py-8 md:py-12'}`}>
+    <section id="filter-section" class={`sticky top-0 z-40 transition-all duration-300 w-full ${isStuck() ? 'bg-sys-paper-base/95 backdrop-blur-sm shadow-lg py-3' : 'pt-2 md:pt-3'}`}>
       <div class={`max-w-6xl mx-auto px-4 transition-all duration-300 ${isStuck() ? '' : 'mb-12 md:mb-24'}`}>
         <form onSubmit={handleSearch} class={`hidden sm:grid grid-cols-4 transition-all duration-300 ${isStuck() ? 'gap-2' : 'gap-4'}`}>
           <div class={`space-y-2 ${isStuck() ? '' : 'space-y-2'}`}>

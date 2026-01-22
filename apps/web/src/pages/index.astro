@@ -13,7 +13,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
 <Layout title={t('meta.siteTitle')}>
   <div class="grain-overlay min-h-screen">
     <Hero />
-    <div class="max-w-6xl mx-auto px-4 md:px-6 py-8">
+    <div class="max-w-6xl mx-auto px-4 md:px-6 pb-2">
       <SearchBar client:load />
     </div>
     <FilterBar client:load />
