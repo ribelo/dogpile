@@ -9,6 +9,13 @@
   },
   "search": {
     "placeholder": "Szukaj psa...",
+    "examples": [
+      "leniuszek do małego mieszkania",
+      "towarzysz do biegania w górach",
+      "spokojny pies do rodziny",
+      "aktywny pies na duże podwórko",
+      "szczeniak dla początkujących"
+    ],
     "button": "Szukaj"
   },
   "filters": {

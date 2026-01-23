@@ -9,6 +9,13 @@
   },
   "search": {
     "placeholder": "Search for a dog...",
+    "examples": [
+      "small companion for apartment",
+      "hiking buddy for mountains",
+      "calm dog for family",
+      "active dog for big backyard",
+      "puppy for beginners"
+    ],
     "button": "Search"
   },
   "filters": {

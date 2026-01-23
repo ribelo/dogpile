@@ -1,6 +1,7 @@
-import { createSignal, For, Show } from "solid-js"
+import { createSignal, For, Show, onMount, onCleanup } from "solid-js"
 import type { Dog } from "./types"
 import { capitalizeWords } from "../utils/format"
+import { t } from "../i18n"
 
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787'
 
@@ -9,6 +10,32 @@ export default function SearchBar() {
   const [results, setResults] = createSignal<Dog[]>([])
   const [loading, setLoading] = createSignal(false)
   const [searched, setSearched] = createSignal(false)
+
+  // Rotating placeholder
+  const [placeholderIndex, setPlaceholderIndex] = createSignal(0)
+  const [isFocused, setIsFocused] = createSignal(false)
+
+  const examples = () => (t('search.examples') || []) as string[]
+
+  const getPlaceholder = () => {
+    const example = examples()[placeholderIndex()]
+    return `${t('search.placeholder')} np. '${example}'`
+  }
+
+  // Rotate placeholder every 5 seconds if not focused and empty
+  let intervalId: ReturnType<typeof setInterval>
+
+  onMount(() => {
+    intervalId = setInterval(() => {
+      if (!isFocused() && !query()) {
+        setPlaceholderIndex((i) => (i + 1) % examples().length)
+      }
+    }, 5000)
+  })
+
+  onCleanup(() => {
+    clearInterval(intervalId)
+  })
 
   // TODO: Support global filters (city, size, sex) in search queries
   const handleSearch = async (e: Event) => {
@@ -38,16 +65,18 @@ export default function SearchBar() {
           type="text"
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
-          placeholder="Szukaj psa... np. 'szczeniak z Legnicy'"
+          placeholder={getPlaceholder()}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           class="flex-1 px-4 py-3 border-2 border-sys-paper-shadow rounded-lg focus:border-sys-heart-core focus:outline-none"
         />
-        <button 
+        <button
           id="main-search-submit-button"
           type="submit"
           disabled={loading()}
           class="px-6 py-3 bg-sys-ink-primary text-white font-bold rounded-lg hover:bg-sys-heart-core transition-colors disabled:opacity-50"
         >
-          {loading() ? "..." : "Szukaj"}
+          {loading() ? "..." : t('search.button')}
         </button>
       </form>
       
