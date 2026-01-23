@@ -84,14 +84,14 @@ export default function Lightbox(props: LightboxProps) {
   return (
     <Show when={props.isOpen}>
       <Portal>
-        <div 
-          class="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4"
+        <div
+          class="fixed inset-0 bg-white/90 z-[60] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           onClick={handleBackdropClick}
         >
-          <button 
-            class="absolute top-4 right-4 text-white/80 hover:text-white text-3xl p-2 z-10 transition-colors"
+          <button
+            class="absolute top-4 right-4 text-black/80 hover:text-black text-3xl p-2 z-10 transition-colors"
             onClick={props.onClose}
             aria-label="Zamknij pełnoekranowy widok"
           >
