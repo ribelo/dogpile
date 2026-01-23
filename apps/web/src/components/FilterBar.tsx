@@ -35,7 +35,7 @@ export default function FilterBar(_props: FilterBarProps) {
                 id="filter-location-select"
                 value={city()}
                 onInput={(e) => setCity(e.currentTarget.value)}
-                class="w-full filter-input font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 px-4 py-3"
+                class="w-full filter-input font-normal text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 px-4 py-3"
               >
                 <option value="">{t('filters.anywhere')}</option>
                 <For each={CITIES}>
@@ -57,7 +57,7 @@ export default function FilterBar(_props: FilterBarProps) {
                 id="filter-size-select"
                 value={size()}
                 onInput={(e) => setSize(e.currentTarget.value)}
-                class="w-full filter-input font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 px-4 py-3"
+                class="w-full filter-input font-normal text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 px-4 py-3"
               >
                 <option value="">{t('filters.doesntMatter')}</option>
                 <option value="small">{t('filters.pocketSized')}</option>
@@ -79,7 +79,7 @@ export default function FilterBar(_props: FilterBarProps) {
                 id="filter-sex-select"
                 value={sex()}
                 onInput={(e) => setSex(e.currentTarget.value)}
-                class="w-full filter-input font-bold text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 px-4 py-3"
+                class="w-full filter-input font-normal text-sys-ink-primary focus:ring-2 focus:ring-sys-heart-core outline-none appearance-none cursor-pointer pr-10 px-4 py-3"
               >
                 <option value="">{t('filters.doesntMatter')}</option>
                 <option value="male">{t('filters.male')}</option>
