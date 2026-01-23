@@ -2,6 +2,7 @@ import { createSignal } from "solid-js"
 import type { Dog } from "./types"
 import ImageSlider from "./ImageSlider"
 import { t } from "../i18n"
+import { capitalizeWords } from "../utils/format"
 
 interface Props {
   dog: Dog
@@ -59,21 +60,21 @@ export default function DogCard(props: Props) {
       )}
 
       <div class="relative aspect-[4/5] w-full">
-        <ImageSlider 
-          photos={props.dog.photos} 
-          photosGenerated={props.dog.photosGenerated} 
-          alt={props.dog.name} 
+        <ImageSlider
+          photos={props.dog.photos}
+          photosGenerated={props.dog.photosGenerated}
+          alt={capitalizeWords(props.dog.name)}
           class="h-full w-full"
           size="sm"
         />
         <a id={`dog-card-link-${props.dog.id}`} href={`/dogs/${props.dog.id}`} class="absolute inset-0 z-10">
           <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none z-0" />
-          <span class="sr-only">View details for {props.dog.name}</span>
+          <span class="sr-only">View details for {capitalizeWords(props.dog.name)}</span>
         </a>
-        
+
         <div class="absolute bottom-0 left-0 right-0 p-4 text-white z-20 pointer-events-none">
           <h3 class="font-title text-2xl font-bold leading-tight drop-shadow-md">
-            {props.dog.name}
+            {capitalizeWords(props.dog.name)}
           </h3>
           <p class="text-sm font-medium opacity-90 drop-shadow-sm">
             {age() && `${age()}`}{sex() && ` • ${sex()}`}

@@ -2,6 +2,7 @@ import { createResource, createSignal, For, Show, onCleanup } from "solid-js"
 import Check from "lucide-solid/icons/check"
 import X from "lucide-solid/icons/x"
 import Search from "lucide-solid/icons/search"
+import { capitalizeWords } from "../../utils/format"
 
 interface Dog {
   id: string
@@ -267,12 +268,12 @@ export default function AdminQueue(props: Props) {
                     </td>
                     <td class="px-4 py-3">
                       <Show when={dog.thumbnailUrl} fallback={<div class="w-12 h-12 bg-gray-200 rounded" />}>
-                        <img src={dog.thumbnailUrl!} alt={dog.name} class="w-12 h-12 object-cover rounded" />
+                        <img src={dog.thumbnailUrl!} alt={capitalizeWords(dog.name)} class="w-12 h-12 object-cover rounded" />
                       </Show>
                     </td>
                     <td class="px-4 py-3 font-medium">
                       <a href={`/admin/dogs/${dog.id}`} class="text-blue-600 hover:underline">
-                        {dog.name}
+                        {capitalizeWords(dog.name)}
                       </a>
                     </td>
                     <td class="px-4 py-3 text-gray-500">{dog.shelterName}</td>

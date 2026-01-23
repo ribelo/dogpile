@@ -1,5 +1,6 @@
 import { createResource, createSignal, Show, For, onCleanup } from "solid-js"
 import { getPhotoUrl } from "../../utils/photo-url"
+import { capitalizeWords } from "../../utils/format"
 
 interface DogDetail {
   id: string
@@ -307,7 +308,7 @@ export default function AdminDogEdit(props: Props) {
           return (
             <>
               <div class="flex items-center justify-between mb-6">
-                <h1 class="text-2xl font-bold">{d().name}</h1>
+                <h1 class="text-2xl font-bold">{capitalizeWords(d().name)}</h1>
                 <div class="flex gap-2">
                   <Show when={d().status === "pending"}>
                     <button

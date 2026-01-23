@@ -1,5 +1,6 @@
 import { createSignal, For, Show } from "solid-js"
 import type { Dog } from "./types"
+import { capitalizeWords } from "../utils/format"
 
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787'
 
@@ -60,7 +61,7 @@ export default function SearchBar() {
                 <a href={`/dogs/${dog.id}`} class="block p-4 bg-sys-paper-card rounded-lg hover:shadow-md transition-shadow">
                   <div class="flex items-center gap-4">
                     <div class="flex-1">
-                      <h3 class="font-bold text-lg">{dog.name}</h3>
+                      <h3 class="font-bold text-lg">{capitalizeWords(dog.name)}</h3>
                       <p class="text-sm text-sys-ink-primary/60">
                         {dog.locationCity} • {dog.sizeEstimate?.value}
                       </p>

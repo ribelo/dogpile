@@ -1,5 +1,6 @@
 import { createResource, createSignal, For, Show, onCleanup } from "solid-js"
 import Search from "lucide-solid/icons/search"
+import { capitalizeWords } from "../../utils/format"
 
 interface Dog {
   id: string
@@ -389,12 +390,12 @@ export default function AdminDogsList(props: Props) {
                   <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3">
                       <Show when={dog.thumbnailUrl} fallback={<div class="w-12 h-12 bg-gray-200 rounded" />}>
-                        <img src={dog.thumbnailUrl!} alt={dog.name} class="w-12 h-12 object-cover rounded" />
+                        <img src={dog.thumbnailUrl!} alt={capitalizeWords(dog.name)} class="w-12 h-12 object-cover rounded" />
                       </Show>
                     </td>
                     <td class="px-4 py-3 font-medium">
                       <a href={`/admin/dogs/${dog.id}`} class="text-blue-600 hover:underline">
-                        {dog.name}
+                        {capitalizeWords(dog.name)}
                       </a>
                     </td>
                     <td class="px-4 py-3 text-gray-500">{dog.shelterName}</td>
@@ -505,7 +506,7 @@ export default function AdminDogsList(props: Props) {
             ></div>
             <div class="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
               <h3 class="text-lg font-bold text-gray-900 mb-2">
-                Delete {dogToDelete()?.name}?
+                Delete {capitalizeWords(dogToDelete()?.name || "this dog")}?
               </h3>
               <p class="text-gray-500 mb-6">
                 Are you sure you want to delete this dog? This will permanently remove the dog and all associated photos.
