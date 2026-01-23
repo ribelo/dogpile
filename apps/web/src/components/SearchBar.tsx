@@ -2,6 +2,8 @@ import { createSignal, For, Show, onMount, onCleanup, createMemo } from "solid-j
 import type { Dog } from "./types"
 import { capitalizeWords } from "../utils/format"
 import { t } from "../i18n"
+import plTranslations from "../i18n/pl.json"
+import enTranslations from "../i18n/en.json"
 
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787'
 
@@ -15,7 +17,11 @@ export default function SearchBar() {
   const [placeholderIndex, setPlaceholderIndex] = createSignal(0)
   const [isFocused, setIsFocused] = createSignal(false)
 
-  const examples = () => (t('search.examples') || []) as string[]
+  const examples = () => {
+    const lang = typeof document !== 'undefined' ? document.documentElement.lang : 'pl'
+    const translations = lang === 'en' ? enTranslations : plTranslations
+    return translations.search.examples || []
+  }
 
   const placeholder = createMemo(() => {
     const example = examples()[placeholderIndex()]
