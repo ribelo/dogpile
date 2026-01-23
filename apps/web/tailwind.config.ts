@@ -32,7 +32,7 @@ export default {
       },
       fontFamily: {
         title: ["Fraunces", "serif"],
-        narrative: ["Quicksand", "sans-serif"],
+        narrative: ["Sora", "sans-serif"],
       },
       animation: {
         breath: "breath 4s ease-in-out infinite",
