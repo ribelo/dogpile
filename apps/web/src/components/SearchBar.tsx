@@ -1,4 +1,4 @@
-import { createSignal, For, Show, onMount, onCleanup } from "solid-js"
+import { createSignal, For, Show, onMount, onCleanup, createMemo } from "solid-js"
 import type { Dog } from "./types"
 import { capitalizeWords } from "../utils/format"
 import { t } from "../i18n"
@@ -17,10 +17,10 @@ export default function SearchBar() {
 
   const examples = () => (t('search.examples') || []) as string[]
 
-  const getPlaceholder = () => {
+  const placeholder = createMemo(() => {
     const example = examples()[placeholderIndex()]
     return `${t('search.placeholder')} np. '${example}'`
-  }
+  })
 
   // Rotate placeholder every 5 seconds if not focused and empty
   let intervalId: ReturnType<typeof setInterval>
@@ -65,7 +65,7 @@ export default function SearchBar() {
           type="text"
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
-          placeholder={getPlaceholder()}
+          placeholder={placeholder()}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           class="flex-1 px-4 py-3 border-2 border-sys-paper-shadow rounded-lg focus:border-sys-heart-core focus:outline-none"
