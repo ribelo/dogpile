@@ -84,6 +84,23 @@ const displaySrcset = featuredDog
   </div>
 
   <div class="relative hidden md:block">
+    <!-- Decorative paw prints -->
+    <div class="paw-print paw-tl" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C9.79 2 8 3.79 8 6s1.79 4 4 4 0-2.21-1.79-4-4S14.21 2 12 2zm-2 8c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2z"/>
+      </svg>
+    </div>
+    <div class="paw-print paw-br" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C9.79 2 8 3.79 8 6s1.79 4 4 4 0-2.21-1.79-4-4S14.21 2 12 2zm-2 8c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2z"/>
+      </svg>
+    </div>
+    <div class="paw-print paw-bl" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C9.79 2 8 3.79 8 6s1.79 4 4 4 0-2.21-1.79-4-4S14.21 2 12 2zm-2 8c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2z"/>
+      </svg>
+    </div>
+
     <!-- Background polaroids (decorative) -->
     <div class="absolute -top-12 -left-12 w-40 h-48 bg-sys-paper-card p-3 pb-10 shadow-lg -rotate-12 opacity-60 hidden md:block transform hover:rotate-0 transition-transform duration-500">
       <div class="w-full h-full bg-sys-ink-primary/5"></div>
@@ -126,7 +143,37 @@ const displaySrcset = featuredDog
     0%, 100% { transform: rotate(2deg) scale(1); }
     50% { transform: rotate(1.5deg) scale(1.02); }
   }
+  @keyframes pawFloat {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(2px, -2px); }
+    50% { transform: translate(0, -4px); }
+    75% { transform: translate(-2px, -2px); }
+  }
   .animate-breath {
     animation: breath 8s ease-in-out infinite;
+  }
+  .paw-print {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    opacity: 0.12;
+    color: #e07a5f;
+    z-index: 0;
+    animation: pawFloat 10s ease-in-out infinite;
+  }
+  .paw-tl {
+    top: -20px;
+    left: -30px;
+    animation-delay: 0s;
+  }
+  .paw-br {
+    bottom: -15px;
+    right: -25px;
+    animation-delay: 3.3s;
+  }
+  .paw-bl {
+    bottom: 40px;
+    left: -40px;
+    animation-delay: 6.6s;
   }
 </style>
