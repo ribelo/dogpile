@@ -86,7 +86,17 @@ const displaySrcset = featuredDog
   <div class="relative hidden md:block">
     <!-- Decorative paw prints -->
     <div class="paw-print paw-tl" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="currentColor">
+      <svg viewBox="0 0 24 24" fill="currentColor" style="color: #e07a5f">
+        <path d="M12 2C9.79 2 8 3.79 8 6s1.79 4 4 4 0-2.21-1.79-4-4S14.21 2 12 2zm-2 8c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2z"/>
+      </svg>
+    </div>
+    <div class="paw-print paw-br" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor" style="color: #e07a5f">
+        <path d="M12 2C9.79 2 8 3.79 8 6s1.79 4 4 4 0-2.21-1.79-4-4S14.21 2 12 2zm-2 8c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2z"/>
+      </svg>
+    </div>
+    <div class="paw-print paw-bl" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="currentColor" style="color: #e07a5f">
         <path d="M12 2C9.79 2 8 3.79 8 6s1.79 4 4 4 0-2.21-1.79-4-4S14.21 2 12 2zm-2 8c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2zm0-4c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2-.9 2-2 2z"/>
       </svg>
     </div>
@@ -145,35 +155,35 @@ const displaySrcset = featuredDog
   }
   @keyframes pawFloat {
     0%, 100% { transform: translate(0, 0); }
-    25% { transform: translate(2px, -2px); }
-    50% { transform: translate(0, -4px); }
-    75% { transform: translate(-2px, -2px); }
+    25% { transform: translate(4px, -4px); }
+    50% { transform: translate(0, -6px); }
+    75% { transform: translate(-4px, -4px); }
   }
   .animate-breath {
     animation: breath 8s ease-in-out infinite;
   }
-  .paw-print {
+   .paw-print {
     position: absolute;
     width: 48px;
     height: 48px;
-    opacity: 0.12;
+    opacity: 0.25;
     color: #e07a5f;
-    z-index: 0;
+    z-index: 5;
     animation: pawFloat 10s ease-in-out infinite;
   }
   .paw-tl {
-    top: -20px;
-    left: -30px;
+    top: 20px;
+    left: 30px;
     animation-delay: 0s;
   }
   .paw-br {
-    bottom: -15px;
-    right: -25px;
+    bottom: 20px;
+    right: 30px;
     animation-delay: 3.3s;
   }
   .paw-bl {
-    bottom: 40px;
-    left: -40px;
+    bottom: -20px;
+    left: 40px;
     animation-delay: 6.6s;
   }
 </style>
