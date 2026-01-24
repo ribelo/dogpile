@@ -439,15 +439,60 @@ const routes: Route[] = [
     handler: Effect.fn("api.getPublicDog")(function* (_req, env, params) {
       const db = drizzle(env.DB)
       const result = yield* Effect.tryPromise({
-        try: () => db.select().from(dogs).where(eq(dogs.id, params.id)).get(),
+        try: () => db.select({
+          id: dogs.id,
+          shelterId: dogs.shelterId,
+          externalId: dogs.externalId,
+          name: dogs.name,
+          sex: dogs.sex,
+          locationName: dogs.locationName,
+          locationCity: dogs.locationCity,
+          locationLat: dogs.locationLat,
+          locationLng: dogs.locationLng,
+          isFoster: dogs.isFoster,
+          breedEstimates: dogs.breedEstimates,
+          sizeEstimate: dogs.sizeEstimate,
+          ageEstimate: dogs.ageEstimate,
+          weightEstimate: dogs.weightEstimate,
+          personalityTags: dogs.personalityTags,
+          vaccinated: dogs.vaccinated,
+          sterilized: dogs.sterilized,
+          chipped: dogs.chipped,
+          furLength: dogs.furLength,
+          furType: dogs.furType,
+          colorPrimary: dogs.colorPrimary,
+          colorSecondary: dogs.colorSecondary,
+          colorPattern: dogs.colorPattern,
+          earType: dogs.earType,
+          tailType: dogs.tailType,
+          photos: dogs.photos,
+          photosGenerated: dogs.photosGenerated,
+          sourceUrl: dogs.sourceUrl,
+          urgent: dogs.urgent,
+          status: dogs.status,
+          rawDescription: dogs.rawDescription,
+          generatedBio: dogs.generatedBio,
+          lastSeenAt: dogs.lastSeenAt,
+          createdAt: dogs.createdAt,
+          updatedAt: dogs.updatedAt,
+        }).from(shelters)
+        .leftJoin(dogs, eq(shelters.id, dogs.shelterId))
+        .where(eq(dogs.id, params.id))
+        .get(),
         catch: (e) => new DatabaseError({ operation: "getPublicDog", cause: e })
       })
-      
+       
       if (!result || result.status !== "available") {
         return yield* json({ error: "Dog not found" }, 404)
       }
-      
+       
       const { fingerprint, ...publicData } = result as any
+
+      // Add shelter name from joined query
+      if (publicData?.shelters?.name) {
+        publicData.shelterName = publicData.shelters.name
+      }
+
       return yield* json(publicData)
     }),
   },
