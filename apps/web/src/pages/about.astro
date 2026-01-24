@@ -6,24 +6,11 @@ import DogCard from '../../components/DogCard'
 import { t, type Language } from '../../i18n'
 
 const lang = (Astro.currentLocale as Language) || 'pl'
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787'
-
-let featuredDogs = []
-
-// Fetch random dogs for "O projekcie" page
-try {
-  const response = await fetch(`${API_URL}/dogs/random?limit=6`)
-  if (response.ok) {
-    const data = await response.json()
-    featuredDogs = data.dogs || []
-  }
-} catch (e) {
-  console.error("Failed to fetch random dogs", e)
-}
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
 
 ---
 
-<Layout title={`${t('about.title', lang)} - Dogpile`}>
+  <Layout title={`${t('about.title', lang)} - Dogpile`}>
   <div class="grain-overlay min-h-screen pt-32 pb-20">
     <Header />
     
@@ -40,7 +27,7 @@ try {
       </header>
 
       <!-- Featured Dogs Section -->
-      <section id="dogs" class="mb-20">
+      <section class="mb-20">
         <h2 class="font-title text-3xl font-bold text-sys-ink-primary mb-6">
           {t('about.featuredDogs', lang)}
         </h2>
