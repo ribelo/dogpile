@@ -87,8 +87,20 @@
   },
   "nav": {
     "sniffAround": "Sniff Around",
-    "about": "About",
+    "about": "O projekcie",
     "myPile": "My Pile"
+  },
+  "about": {
+    "title": "About Dogpile",
+    "tagline": "Dogpile is an adoption aggregator for Polish dog shelters.",
+    "mission": "Dogpile aggregates dogs from Polish shelters in one place to make finding your best friend easier.",
+    "problem": "Many shelters in Poland have limited resources and outdated websites, which hinders finding the perfect match between person and pet.",
+    "solution": "Dogpile solves this problem by collecting dogs from shelters in one convenient location with advanced filters and intuitive search.",
+    "project": "Project Dogpile",
+    "featuredDogs": "Featured Dogs",
+    "team": "Team",
+    "contact": "Contact",
+    "browseDogs": "Browse Dogs"
   },
   "dogDetail": {
     "backToList": "Back to the pile",

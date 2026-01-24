@@ -1,0 +1,129 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import Header from '../../components/Header.astro'
+import Footer from '../../components/Footer.astro'
+import DogCard from '../../components/DogCard'
+import { t, type Language } from '../../i18n'
+
+const lang = (Astro.currentLocale as Language) || 'pl'
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8787'
+
+let featuredDogs = []
+
+// Fetch random dogs for "O projekcie" page
+try {
+  const response = await fetch(`${API_URL}/dogs/random?limit=6`)
+  if (response.ok) {
+    const data = await response.json()
+    featuredDogs = data.dogs || []
+  }
+} catch (e) {
+  console.error("Failed to fetch random dogs", e)
+}
+
+---
+
+<Layout title={`${t('about.title', lang)} - Dogpile`}>
+  <div class="grain-overlay min-h-screen pt-32 pb-20">
+    <Header />
+    
+    <div class="max-w-6xl mx-auto px-4 md:px-6">
+      
+      <!-- Hero Section -->
+      <header class="text-center mb-16">
+        <h1 class="font-title text-5xl md:text-6xl font-black text-sys-ink-primary mb-6 lowercase">
+          {t('about.title', lang)}
+        </h1>
+        <p class="text-xl text-sys-ink-primary/70 mb-8 max-w-3xl mx-auto leading-relaxed">
+          {t('about.tagline', lang)}
+        </p>
+      </header>
+
+      <!-- Featured Dogs Section -->
+      <section id="dogs" class="mb-20">
+        <h2 class="font-title text-3xl font-bold text-sys-ink-primary mb-6">
+          {t('about.featuredDogs', lang)}
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {featuredDogs.map(dog => (
+            <div class="card group !p-0 overflow-hidden">
+              <div class="relative aspect-[4/5] w-full overflow-hidden rounded-sm bg-sys-paper-shadow">
+                <img 
+                  src={dog.photosGenerated?.[0] || dog.photos?.[0] ? `https://dogpile.extropy.club/${dog.photosGenerated?.[0] || dog.photos?.[0]}-lg.webp` : "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&q=80&auto=format&fit=crop"}
+                  alt={dog.name}
+                  class="w-full h-full object-cover grayscale-[0.2] sepia-[0.1] group-hover:grayscale-0 group-hover:sepia-0 transition-all duration-300"
+                  loading="lazy"
+                />
+                <div class="absolute bottom-0 left-0 right-0 p-4 text-center text-white bg-gradient-to-t from-black/50 to-transparent pointer-events-none">
+                  <h3 class="font-title text-xl font-bold mb-1">
+                    {dog.name}
+                  </h3>
+                  <div class="text-sm opacity-80">
+                    {dog.locationCity} • {dog.sizeEstimate?.value}
+                  </div>
+                </div>
+              </div>
+              
+              <a href={`/dogs/${dog.id}`} class="block mt-4 text-center">
+                <span class="text-sys-heart-core font-bold hover:underline">
+                  Zobacz więcej
+                </span>
+              </a>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <!-- Project Description Section -->
+      <section class="bg-sys-paper-card paper-edge p-8 mb-20 rounded-lg">
+        <h2 class="font-title text-3xl font-bold text-sys-ink-primary mb-6">
+          {t('about.project', lang)}
+        </h2>
+        <div class="prose max-w-3xl mx-auto">
+          <p class="mb-4">
+            {t('about.mission', lang)}
+          </p>
+          <div class="flex flex-col gap-4 mb-6">
+            <div>
+              <p class="font-bold text-sys-ink-primary mb-1">
+                {t('about.problem', lang)}
+              </p>
+              <p class="text-sys-ink-primary/70">
+                {t('about.solution', lang)}
+              </p>
+            </div>
+            <div>
+              <p class="font-bold text-sys-ink-primary mb-1">
+                {t('about.team', lang)}
+              </p>
+              <div class="flex items-center gap-2 text-sys-ink-primary/70">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20 21c0 7-9 13-9 13s-9-6-8-12a8 8 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/>
+                </svg>
+                <span>Marta R.</p>
+                <span class="text-sm">Founder • Frontend Dev</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Contact Section -->
+      <section class="bg-sys-heart-soft/10 paper-edge p-8 mb-20 rounded-lg">
+        <h2 class="font-title text-3xl font-bold text-sys-ink-primary mb-6">
+          {t('about.contact', lang)}
+        </h2>
+        <div class="text-center max-w-2xl mx-auto">
+          <p class="mb-4 text-lg">
+            Masz pytania? Chcesz wziąć udział?
+          </p>
+          <a href="/dogs" class="btn-primary inline-block">
+            {t('about.browseDogs', lang)}
+          </a>
+        </div>
+      </section>
+
+    </div>
+    
+    <Footer />
+  </Layout>

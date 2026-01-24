@@ -82,6 +82,18 @@
     "sniffAround": "poniuchaj",
     "viewAllStories": "Zobacz wszystkie historie →"
   },
+  "about": {
+    "title": "O projekcie",
+    "tagline": "Dogpile to platforma adopcyjna dla zwierząt w Polsce.",
+    "mission": "Misją Dogpile jest agregacja psów z polskich schronisk w jednym miejscu, by ułatwić znalezienie najlepszego przyjaciela dla każdego szukającego.",
+    "problem": "Wiele schronisk w Polsce ma ograniczone zasoby i przestarzałe strony, co utrudnia znalezienie idealnego dopasowania między psem a rodziną.",
+    "solution": "Dogpile rozwiązuje ten problem, zbierając psy z setek schronisk w jednej, łatwo dostępnej lokalizacji z zaawansowanymi filtrami i intuicyjnym wyszukiwaniem.",
+    "project": "Projekt Dogpile",
+    "featuredDogs": "Wybrane psy",
+    "team": "Zespół",
+    "contact": "Kontakt",
+    "browseDogs": "Przeglądaj psy"
+  },
   "meta": {
     "siteTitle": "Dogpile - Znajdź swojego psa",
     "siteDescription": "Psy z polskich schronisk w jednym miejscu. Znajdź swojego najlepszego przyjaciela."
