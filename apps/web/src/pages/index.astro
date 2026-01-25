@@ -13,10 +13,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:8787'
    <Layout title={t('meta.siteTitle')}>
    <div class="grain-overlay min-h-screen">
      <Hero />
-     <div class="max-w-6xl mx-auto px-4 md:px-6 grid md:grid-cols-2 gap-8 md:gap-12 items-center py-12 md:py-24">
-       <SearchBar client:load />
-     </div>
-      <div class="max-w-6xl mx-auto px-4 md:px-6 pt-2 pb-8 md:pb-12 lg:pb-16">
+      <div class="max-w-6xl mx-auto px-4 md:px-6 pb-2">
+        <SearchBar client:load />
+      </div>
+      <FilterBar client:load />
+       <div id="dogs" class="max-w-6xl mx-auto px-4 md:px-6 pt-2 pb-8 md:pb-12 lg:pb-16">
         <h2 class="font-title text-2xl md:text-3xl lg:text-4xl font-bold text-sys-ink-primary mb-6">
           {t('home.sniffAround')}
         </h2>

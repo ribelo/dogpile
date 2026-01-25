@@ -35,7 +35,7 @@ const displaySrcset = featuredDog
     `
 ---
 
-  <header id="dogs" class="relative z-10 max-w-6xl mx-auto px-4 md:px-6 grid md:grid-cols-2 gap-8 md:gap-12 items-center py-12 md:py-24">
+  <header class="relative z-10 max-w-6xl mx-auto px-4 md:px-6 grid md:grid-cols-2 gap-8 md:gap-12 items-center py-12 md:py-24">
   <div class="animate-[unfold_1s_ease-out]">
     <span id="hero-badge" class="inline-flex items-center gap-1 px-3 py-1 bg-sys-heart-soft/30 text-sys-ink-primary font-bold rounded-full text-xs md:text-sm mb-4 transform rotate-1 border border-sys-heart-soft/50">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -43,16 +43,14 @@ const displaySrcset = featuredDog
       </svg>
       {t('hero.badge', lang)}
     </span>
-    <h1 id="hero-headline" class="font-title text-4xl md:text-6xl lg:text-7xl font-black text-sys-ink-primary mb-6 leading-[0.9] lowercase" set:html={t('hero.headline', lang)} />
+    <h1 id="hero-headline" class="hero-heading font-title text-4xl md:text-6xl lg:text-7xl font-black text-sys-ink-primary mb-6 leading-[0.9]" set:html={t('hero.headline', lang)} />
     <p id="hero-subheadline" class="text-lg md:text-xl text-sys-ink-primary/80 mb-8 max-w-md leading-relaxed">
       {t('hero.subheadline', lang)}
     </p>
     <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
       <a id="hero-cta-button" href="#dogs" class="w-full sm:w-auto min-h-[44px] justify-center bg-sys-ink-primary text-sys-paper-base font-bold text-lg py-4 px-8 paper-edge hover:bg-sys-heart-core transition-colors flex items-center gap-2 no-underline">
         {t('hero.cta', lang)}
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-sys-heart-soft" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 14c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-5-4c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-3-3c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-        </svg>
+        <img src="/paw-icon.svg" alt="" class="w-8 h-8" />
       </a>
       <div id="hero-stats" class="flex items-center gap-2 py-2" aria-hidden="true">
         <div class="flex -space-x-3">
@@ -185,5 +183,9 @@ const displaySrcset = featuredDog
     bottom: -20px;
     left: 40px;
     animation-delay: 6.6s;
+  }
+
+  .hero-heading {
+    text-transform: none;
   }
 </style>
