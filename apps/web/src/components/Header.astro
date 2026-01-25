@@ -22,7 +22,9 @@ const lang = (Astro.currentLocale as Language) || 'pl'
         {t('nav.about', lang)}
       </a>
       <a id="nav-my-pile" href="/favorites" class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-sys-heart-core hover:opacity-80 transition-opacity no-underline">
-        <img src="/paw-icon.svg" alt="" class="w-4 h-4" />
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 10-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        </svg>
         {t('nav.myPile', lang)}
       </a>
       <div class="w-px h-4 bg-sys-paper-shadow mx-2"></div>
@@ -32,7 +34,9 @@ const lang = (Astro.currentLocale as Language) || 'pl'
     <!-- Mobile Menu Button (simplified for now) -->
     <div class="flex md:hidden items-center gap-4">
       <a id="nav-mobile-my-pile" href="/favorites" class="text-sys-heart-core" aria-label={t('nav.myPile', lang)}>
-        <img src="/paw-icon.svg" alt="" class="w-6 h-6" />
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 10-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+        </svg>
       </a>
       <LanguageSwitcher client:load id="mobile-language-switcher" />
     </div>
